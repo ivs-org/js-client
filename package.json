@@ -1,0 +1,43 @@
+{
+  "name": "@videograce/client",
+  "version": "2.4.251117",
+  "type": "module",
+  "main": "./index.js",
+  "module": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./opus-decoder": "./opus_decoder.js",
+    "./vp8-decoder": "./vp8_decoder.js",
+    "./vp8-rtpcollector": "./vp8_rtpcollector.js",
+    "./media-channel": "./media_channel.js",
+    "./control-ws": "./control_ws.js",
+    "./audio-processor": "./audio_processor.js",
+    "./audio-shared": "./audio_shared.js"
+  },
+  "files": [
+    "*.js",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://videograce.ru",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivs-org/videograce.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "videograce",
+    "wss",
+    "webrtc-alt",
+    "media",
+    "vp8",
+    "opus",
+    "rtp"
+  ],
+  "devDependencies": {
+    "eslint": "^9.39.1"
+  }
+}

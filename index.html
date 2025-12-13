@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <title>VideoGrace Web Client</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="appRoot"></div>
+    <div id="streams" class="hidden"><canvas id="localPreview" class="stream"></canvas></div>
+    <div id="streams" class="hidden"><canvas id="demoPreview" class="stream"></canvas></div>
+
+    <!-- Кастомная модалка -->
+    <div id="appModal" class="app-modal hidden">
+        <div class="app-modal-backdrop"></div>
+        <div class="app-modal-dialog">
+            <div id="appModalTitle" class="app-modal-title"></div>
+            <div id="appModalBody" class="app-modal-body"></div>
+            <div class="app-modal-actions">
+                <button id="appModalOk">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./src/app.js"></script>
+</body>
+</html>

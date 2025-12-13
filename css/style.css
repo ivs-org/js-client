@@ -1,0 +1,1146 @@
+/*****************************************
+ * 1. БАЗА + ТЕМА
+ *****************************************/
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #111;
+    color: #eee;
+    overflow: hidden; /* не даём странице расти выше окна */
+}
+
+:root {
+    --topbar-height: 44px;
+}
+
+header.app-topbar {
+    min-height: var(--topbar-height);
+}
+
+/* Корень приложения */
+.app {
+    height: 100vh;
+    display: flex;
+    position: relative;
+    flex-direction: column;
+    scrollbar-width: thin;
+    scrollbar-color: #333 #090909;
+}
+
+/* Скроллбары (WebKit) */
+#app::-webkit-scrollbar {
+    width: 8px;
+}
+
+#app::-webkit-scrollbar-track {
+    background: #090909;
+}
+
+#app::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 4px;
+}
+
+#app::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/*****************************************
+ * 2. ГЛОБАЛЬНЫЙ ЛЕЙАУТ
+ *****************************************/
+
+/* Оболочка приложения */
+.app-shell {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* чтобы flex-дети могли скроллиться */
+}
+
+/* Центральная часть с панелями (левая/центр/правая) */
+main {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0; /* критично для внутренних скроллов */
+}
+
+/* Базовая панель */
+.panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.app-buttons {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: #181818;
+    border-bottom: 1px solid #333;
+    position: static; /* на десктопе — под шапкой */
+    z-index: 10;
+}
+
+/* Левая колонка (контакты) */
+.panel-left {
+    flex: 0 0 260px;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid #222;
+}
+
+/* Центральная колонка (видео) */
+.panel-center {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* важно, чтобы внутрь мог залезть overflow */
+}
+
+/* Правая колонка (чат/прочее) */
+.panel-right {
+    flex: 0 0 260px;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-left: 1px solid #222;
+}
+
+/*****************************************
+ * 3. HEADER + КАРТОЧКИ + ФОРМЫ
+ *****************************************/
+
+header {
+    padding: 8px 16px;
+    background: #181818;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+}
+
+.card {
+    background: #181818;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 0 0 1px #222;
+}
+
+label {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+input {
+    width: 100%;
+    box-sizing: border-box;
+    background: #111;
+    border-radius: 4px;
+    border: 1px solid #333;
+    padding: 6px 8px;
+    color: #eee;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+button {
+    cursor: pointer;
+    background: #007aff;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #fff;
+}
+
+button.secondary {
+    background: #333;
+}
+
+.remember-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.controls-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.status-row {
+    font-size: 12px;
+    color: #aaa;
+}
+
+/*****************************************
+ * 4. ВИДЕО / ПОТОКИ
+ *****************************************/
+
+/* Область с видео/placeholder */
+.call-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    overflow-y: auto; /* вот тут появляется скролл */
+}
+
+.call-streams {
+    flex: 1 1 auto;
+    min-height: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-auto-rows: minmax(160px, 1fr);
+    gap: 8px;
+    padding: 8px;
+    background: #000;
+}
+
+.call-streams video,
+.call-streams canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+    border-radius: 4px;
+}
+
+.stream {
+    background: #000;
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+video {
+    width: 100%;
+    height: auto;
+    background: #000;
+    border-radius: 6px;
+}
+
+.row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.local-preview {
+    display: block;
+    border: 2px solid #3fa9f5;
+    box-sizing: border-box;
+}
+
+/*****************************************
+ * 5. АВТОРИЗАЦИЯ / РЕГИСТРАЦИЯ
+ *****************************************/
+
+.auth-card {
+    background: #020617;
+    border-radius: 16px;
+    padding: 24px 24px 20px;
+    max-width: 380px;
+    width: 100%;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.auth-card h2 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.auth-subtitle {
+    margin: 0 0 20px;
+    font-size: 13px;
+    color: #9ca3af;
+}
+
+.auth-group {
+    margin-bottom: 14px;
+}
+
+.auth-group label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: #9ca3af;
+}
+
+.auth-group input[type="text"],
+.auth-group input[type="password"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid #1f2937;
+    background: #020617;
+    color: #e5e7eb;
+    font-size: 14px;
+}
+
+.auth-group input:focus {
+    outline: none;
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
+}
+
+.auth-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.auth-remember {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #9ca3af;
+}
+
+.auth-remember input {
+    margin: 0;
+}
+
+.auth-actions {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 999px;
+    border: none;
+    background: linear-gradient(135deg, #38bdf8, #6366f1);
+    color: #0b1120;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.btn-secondary {
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 999px;
+    border: 1px solid #4b5563;
+    background: transparent;
+    color: #e5e7eb;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.auth-switch {
+    margin-top: 10px;
+    font-size: 13px;
+    color: #9ca3af;
+    text-align: center;
+}
+
+.link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 13px;
+    color: #38bdf8;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+/* Регистрация — капча-заглушка */
+
+.reg-captcha-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.reg-captcha-placeholder {
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: #222;
+    font-size: 12px;
+    color: #777;
+}
+
+/*****************************************
+ * 6. МОДАЛКА
+ *****************************************/
+
+.app-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.app-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.75);
+}
+
+.app-modal-dialog {
+    position: relative;
+    z-index: 1;
+    background: #020617;
+    border-radius: 14px;
+    padding: 18px 20px 16px;
+    max-width: 360px;
+    width: 100%;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(248, 113, 113, 0.5);
+}
+
+.app-modal-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #fca5a5;
+}
+
+.app-modal-body {
+    font-size: 14px;
+    color: #e5e7eb;
+    margin-bottom: 14px;
+}
+
+.app-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.app-modal-actions button {
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: none;
+    background: #f87171;
+    color: #0b1120;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* По умолчанию (на десктопе) считаем, что in-call */
+.app-main.in-call .call-placeholder {
+    display: none;
+}
+
+/* Когда не в конференции — убираем call-панель и растягиваем чат */
+.app-main.no-call .panel-center {
+    display: none;
+}
+
+.app-main.no-call .panel-right {
+    flex: 1 1 auto;
+    max-width: none;
+    border-left: none;
+}
+
+/*****************************************
+ * 7. ПАНЕЛЬ КНОПОК ВЗВОНКА
+ *****************************************/
+
+.buttons-panel {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+.buttons-panel-main {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.buttons-panel-layout {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Кнопка-иконка */
+.btn-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    margin: 0;
+    background: #2b2b2b;
+    color: #f0f0f0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+    box-shadow: 0 0 0 1px #333;
+}
+
+.btn-icon.small {
+    width: 36px;
+    height: 36px;
+}
+
+.btn-icon-inner {
+    font-size: 20px;
+    line-height: 1;
+}
+
+/* Активное состояние (камера/мик/вызов) */
+.btn-icon.active {
+    background: #2f80ed;
+    box-shadow: 0 0 0 1px #2f80ed;
+}
+
+/* Hover/active */
+.btn-icon:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 1px #4f9dff;
+}
+
+.btn-icon:active {
+    transform: translateY(0);
+    box-shadow: 0 0 0 1px #1d5bbf;
+}
+
+/*****************************************
+ * 8. ПАНЕЛЬ КОНТАКТОВ
+ *****************************************/
+
+/* Контейнер панели контактов */
+.contacts-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 250px;
+}
+
+.contacts-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #222;
+    font-size: 13px;
+}
+
+.contacts-status {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid #444;
+}
+
+.contacts-status.online {
+    color: #2ecc71;
+    border-color: #2ecc71;
+}
+
+.contacts-status.offline {
+    color: #e67e22;
+    border-color: #e67e22;
+}
+
+.contacts-sync-time {
+    margin-left: auto;
+    font-size: 11px;
+    color: #777;
+}
+
+/* Кнопка закрытия панели */
+.panel-close-btn {
+    margin-left: auto;
+    border: none;
+    background: transparent;
+    color: #888;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 4px;
+}
+
+.panel-close-btn:hover {
+    color: #fff;
+}
+
+/* Вкладки "Контакты / Участники" */
+.contacts-tabs {
+    display: flex;
+    border-bottom: 1px solid #222;
+}
+
+.tab-btn {
+    flex: 1 1 50%;
+    padding: 4px 6px;
+    font-size: 12px;
+    border: none;
+    background: #101010;
+    color: #aaa;
+    cursor: pointer;
+}
+
+.tab-btn.active {
+    background: #1f1f1f;
+    color: #fff;
+    border-bottom: 2px solid #2f80ed;
+}
+
+.tab-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.contacts-body {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.contacts-empty {
+    padding: 8px;
+    font-size: 12px;
+    color: #777;
+}
+
+/* Дерево контактов/групп */
+
+.contacts-tree,
+.contacts-tree-members {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* Общая строка */
+.contact-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    cursor: pointer;
+    user-select: none;
+    height: 32px;
+}
+
+.contact-row:hover {
+    background: #222;
+}
+
+.contact-row.active {
+    background: #2f80ed33;
+}
+
+/* Группы */
+
+.group-row {
+    font-weight: 500;
+    color: #ddd;
+}
+
+.group-arrow {
+    width: 14px;
+    text-align: center;
+    opacity: 0.9;
+}
+
+.group-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Контакты / конференции */
+
+.member-row .contact-name,
+.conf-row .contact-name {
+    flex: 1 1 auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.contact-number {
+    font-size: 11px;
+    color: #888;
+}
+
+/* номера слева */
+.contact-number-left {
+    flex: 0 0 auto;
+    min-width: 16px;
+    font-size: 11px;
+    color: #888;
+    text-align: right;
+}
+
+/* индикатор онлайн */
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+}
+
+.status-dot.online {
+    background: #2ecc71;
+}
+
+.status-dot.offline {
+    background: #555;
+}
+
+/* Конференции */
+.conf-icon {
+    flex: 0 0 auto;
+}
+
+.conf-members-count {
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: #aaa;
+    border-radius: 999px;
+    padding: 1px 5px;
+    border: 1px solid #444;
+}
+
+/* Бейдж непрочитанного */
+.unread-badge {
+    flex: 0 0 auto;
+    min-width: 18px;
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: #e74c3c;
+    color: #fff;
+    font-size: 11px;
+    text-align: center;
+}
+
+/*****************************************
+ * 9. ЧАТ
+ *****************************************/
+
+/* Контейнер панели чата */
+.chat-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 250px;
+}
+
+.chat-header {
+    padding: 6px 8px;
+    border-bottom: 1px solid #222;
+    font-size: 13px;
+}
+
+.chat-title {
+    font-weight: 500;
+}
+
+/* Список сообщений */
+.chat-messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Сообщение */
+.chat-message {
+    max-width: 80%;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.chat-message.me {
+    align-self: flex-end;
+    background: #1f4b7a;
+    color: #fff;
+}
+
+.chat-message.other {
+    align-self: flex-start;
+    background: #222;
+    color: #eee;
+}
+
+.chat-message-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    opacity: 0.7;
+    margin-bottom: 2px;
+}
+
+.chat-text {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Ввод */
+.chat-input-row {
+    border-top: 1px solid #222;
+    padding: 4px;
+    display: flex;
+    gap: 4px;
+}
+
+.chat-input {
+    flex: 1 1 auto;
+    font-size: 14px;
+    background: #151515;
+    color: #eee;
+    border: 1px solid #333;
+    border-radius: 4px;
+    resize: none;
+    padding: 4px;
+}
+
+.chat-send-btn {
+    flex: 0 0 auto;
+    padding: 0 10px;
+    font-size: 16px;
+    background: #2f6bcc;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.chat-send-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/*****************************************
+ * 10. ВЕРХНЯЯ ПАНЕЛЬ
+ *****************************************/
+
+.topbar-desktop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: #181818;
+    border-bottom: 1px solid #333;
+    font-size: 14px;
+}
+
+.topbar-left {
+    font-weight: 600;
+}
+
+.topbar-center {
+    flex: 1 1 auto;
+    text-align: center;
+    font-size: 13px;
+    color: #aaa;
+}
+
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.topbar-user {
+    font-size: 13px;
+    color: #ddd;
+}
+
+/* мобильные варианты */
+.topbar-mobile {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    background: #181818;
+    border-bottom: 1px solid #333;
+    font-size: 14px;
+}
+
+.topbar-mobile .topbar-left,
+.topbar-mobile .topbar-center,
+.topbar-mobile .topbar-right {
+    display: flex;
+    align-items: center;
+}
+
+.topbar-mobile .topbar-left {
+    flex: 0 0 auto;
+}
+
+.topbar-mobile .topbar-center {
+    flex: 1 1 auto;
+    justify-content: center;
+}
+
+.topbar-mobile .topbar-right {
+    flex: 0 0 auto;
+    gap: 6px;
+}
+
+.topbar-app-title {
+    font-weight: 600;
+}
+
+.topbar-section {
+    font-size: 13px;
+    color: #aaa;
+}
+
+/* мобильный header чата */
+.topbar-chat {
+    gap: 8px;
+}
+
+.topbar-back,
+.topbar-call {
+    border: none;
+    background: transparent;
+    color: #eee;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 2px 6px;
+}
+
+.topbar-chat-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.topbar-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #1f2937;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: #e5e7eb;
+}
+
+.topbar-chat-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #eee;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/*****************************************
+ * 11. АДАПТИВ ДЛЯ МОБИЛОК
+ *****************************************/
+
+@media (max-width: 900px) {
+    :root {
+        --topbar-height: 44px;
+    }
+
+    html, body {
+        overflow: hidden;
+    }
+
+    .app {
+        height: 100vh;
+    }
+
+    .app-main {
+        flex: 1 1 auto;
+        min-height: 0;
+        box-sizing: border-box;
+    }
+
+    /* Только в режиме звонка оставляем место под нижние кнопки */
+    .app.in-call .app-main {
+        padding-bottom: 72px;
+    }
+
+    /* В режиме мессенджера — без отступа снизу */
+    .app.no-call .app-main {
+        padding-bottom: 0;
+    }
+
+    .panel-left,
+    .panel-center,
+    .panel-right {
+        min-height: 0;
+    }
+
+    /* === 1. РЕЖИМ ЗВОНКА (in-call) === */
+
+    .app-main.in-call {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .app-main.in-call .panel-center {
+        flex: 1 1 auto;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .app-main.in-call .panel-left,
+    .app-main.in-call .panel-right {
+        display: none;
+    }
+
+    /* контакты / чат как оверлей поверх видео */
+    .app.contacts-open .app-main.in-call .panel-left,
+    .app.chat-open .app-main.in-call .panel-right {
+        display: flex;
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: var(--topbar-height, 44px); /* оставляем место под topbar */
+        bottom: 0;
+        z-index: 90;
+        padding: 0 8px;
+        background: #020617;
+        flex-direction: column;
+    }
+
+    .app.contacts-open .app-main.in-call .panel-center,
+    .app.chat-open .app-main.in-call .panel-center {
+        filter: blur(3px);
+        pointer-events: none;
+    }
+
+    /* === 2. РЕЖИМ МЕССЕНДЖЕРА (no-call) === */
+
+    .app-main.no-call {
+        position: relative;
+    }
+
+    /* видео в мессенджере не показываем */
+    .app-main.no-call .panel-center {
+        display: none;
+    }
+
+    /* контакты и чат */
+    .app-main.no-call .panel-left,
+    .app-main.no-call .panel-right {
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: var(--topbar-height, 44px);
+        bottom: 0;
+        display: none;
+        flex-direction: column;
+        padding: 0 8px;
+        box-sizing: border-box;
+        overflow-y: auto;
+    }
+
+    /* по умолчанию — видны контакты на весь экран */
+    .app-main.no-call .panel-left {
+        position: static;
+        inset: auto;
+        flex: 1 1 auto;
+        display: none;
+        width: 100%;
+        max-width: none;
+    }
+
+    /* если открыт чат (chat-open) — показываем чат вместо контактов */
+    .app.chat-open .app-main.no-call .panel-left {
+        display: none;
+    }
+
+    .app.chat-open .app-main.no-call .panel-right {
+        display: flex;
+    }
+
+    /* если явно contacts-open — возвращаемся к контактам */
+    .app.contacts-open .app-main.no-call .panel-left {
+        display: flex;
+    }
+
+    .app.contacts-open .app-main.no-call .panel-right {
+        display: none;
+    }
+
+    /* нижняя панель кнопок:
+     - в режиме звонка видна,
+     - в режиме мессенджера (no-call) — спрятана полностью */
+    .app.no-call .app-buttons {
+        display: none;
+    }
+
+    .app.in-call .app-buttons {
+        display: flex;
+    }
+
+    /* в мессенджере шапки контактов/чата внутри панелей не нужны —
+     управляем через глобальный topbar */
+    .app-main.no-call .panel-left .contacts-header,
+    .app-main.no-call .panel-right .chat-header {
+        display: none;
+    }
+
+    /* в режиме звонка (in-call) — прибиваем панель к низу */
+    .app.in-call .app-buttons {
+        display: flex; /* на всякий, вдруг где-то спрятали */
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.9);
+        backdrop-filter: blur(6px);
+        border-top: 1px solid #333;
+        border-bottom: none;
+        z-index: 100;
+    }
+
+    /* Если поверх видео открыт полноэкранный чат или контакты —
+     на мобилке прячем нижнюю панель, чтобы не закрывала input. */
+    .app.in-call.chat-open .app-buttons,
+    .app.in-call.contacts-open .app-buttons {
+        display: none;
+    }
+}
+
