@@ -9,6 +9,7 @@ import { AudioShared } from './audio/audio_shared.js';
 import { RTPCollector } from '../transport/rtp_collector.js';
 import { VP8Decoder } from '../codecs/vp8_decoder.js';
 import { OpusDecoder } from '../codecs/opus_decoder.js';
+import { CanvasRenderer } from './video/canvas_renderer.js';
 import {
     importAesGcmKey, buildMediaFrame, parseMediaFrame, rtpHeaderLen, serializeRTCP_APP, gcmDecrypt, makeIvGcm,
     WsBinaryMsgType
@@ -50,8 +51,7 @@ export class MediaChannel {
                 this._sendForceKeyFrame();
             });
             this.containerEl = null;
-            this.canvas = null;
-            this.ctx = null;
+            this._previewRenderer = null;
             console.log(`✓ [MediaChannel] Video channel constructed: ${label}`);
         }
 
@@ -144,12 +144,23 @@ export class MediaChannel {
         const title = document.createElement('div');
         title.className = 'mini';
         title.textContent = `${this.label} (${this.channelType})`;
-        this.canvas = document.createElement('canvas');
-        this.canvas.width = 864; this.canvas.height = 480;
+        let canvas = document.createElement('canvas');
+        canvas.width = 864; canvas.height = 480;
         wrapper.appendChild(title);
-        wrapper.appendChild(this.canvas);
-        this.ctx = this.canvas.getContext('2d');
+        wrapper.appendChild(canvas);
         this.containerEl = wrapper;
+
+        if (!this._previewRenderer) {
+            this._previewRenderer = new CanvasRenderer(canvas, {
+                mirrorDefault: true,
+                clearColor: '#000',
+                autoDpr: true,
+                observeResize: true,
+            });
+        } else {
+            this._previewRenderer.setCanvas(canvas);
+        }
+        
         if (onAttached) onAttached(wrapper);
 
         this._connectWS();
@@ -217,19 +228,11 @@ export class MediaChannel {
         }
         this.collector = null;
 
-        if (this.canvas) {
-            this.canvas.width = 0;
-            this.canvas.height = 0;
-            this.ctx = null;
-        }
-
         if (this.containerEl && this.containerEl.parentNode) {
             console.log("Removing media container element.");
             this.containerEl.parentNode.removeChild(this.containerEl);
         }
         this.containerEl = null;
-        this.canvas = null;
-        this.ctx = null;
 
         console.log("✓ Media channel fully stopped and cleaned up.");
     }
@@ -415,16 +418,16 @@ export class MediaChannel {
     }
 
     async _onVideoFrame(encodedFrame) {
-        // encodedFrame is Uint8Array of VP8 payload (no RTP header)
         try {
             const frame = await this.decoder.decode(encodedFrame);
-            // draw onto canvas
-            if (frame) {
-                // draw VideoFrame to canvas
-                createImageBitmap(frame).then(bitmap => {
-                    this.ctx.drawImage(bitmap, 0, 0, this.canvas.width, this.canvas.height);
-                    frame.close();
-                });
+            if (!frame || !this._previewRenderer) return;
+
+            const bitmap = await createImageBitmap(frame);
+            try {
+                this._previewRenderer.drawBitmapContain(bitmap);
+            } finally {
+                bitmap.close?.();
+                frame.close();
             }
         } catch (e) {
             console.error('decode/render err', e);

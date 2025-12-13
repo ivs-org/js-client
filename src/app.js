@@ -20,8 +20,7 @@ import { AudioShared } from './media/audio/audio_shared.js';
 import { MicrophoneSession } from './media/audio/mic_session.js';
 import { CameraSession } from './media/video/cam_session.js';
 import { ScreenSession } from './media/video/screen_session.js';
-import { pickCameraResolution } from './media/video/cam_utils.js';
-import { getResolution, getResolutionValues } from './media/video/resolution.js';
+import { getResolution } from './media/video/resolution.js';
 
 const MOBILE_BREAKPOINT = 900;
 
@@ -455,40 +454,62 @@ function handleDeviceConnected(device) {
     };*/
     if (device.connect_type === 1 /* CreatedDevice */) {
         if (device.device_type == 1) { // Camera
-            let rv = getResolutionValues(device.resolution);
-            cam = new CameraSession({
-                server: ctrl.server,
-                token: ctrl.authToken,
-                deviceId: device.device_id,
-                ssrc: device.author_ssrc,
-                port: device.port,
-                keyHex: device.secure_key,
-                width: rv.width,
-                height: rv.height
-            });
-            
-            cam.start();
-            setState({ camEnabled: true });
-            log(`Camera started id=${device.device_id} ssrc=${device.author_ssrc}`);
-        }
-        if (device.device_type == 2) { // Demonstration
-            let rv = getResolutionValues(device.resolution);
-            scr = new ScreenSession({
-                server: ctrl.server,
-                token: ctrl.authToken,
-                deviceId: device.device_id,
-                ssrc: device.author_ssrc,
-                port: device.port,
-                keyHex: device.secure_key,
-                width: rv.width,
-                height: rv.height
-            });
+            if (!cam) {
+                console.warn('[Cam] CreatedDevice received but local capture is not started; dropping device');
+                ctrl.sendDisconnectDevice(device.device_id);
+                return;
+            }
 
-            scr.start();
-            setState({ demoEnabled: true });
-            log(`Screen capture started id=${device.device_id} ssrc=${device.author_ssrc}`);
+            if (cam._wantDisconnectOnAttach) {
+                ctrl.sendDisconnectDevice(device.device_id);
+                cam.stop().catch(() => { });
+                cam = null;
+                setState({ camEnabled: false });
+                return;
+            }
+
+            cam.attachRemote({
+                server: ctrl.server,
+                token: ctrl.authToken,
+                deviceId: device.device_id,
+                ssrc: device.author_ssrc,
+                port: device.port,
+                keyHex: device.secure_key,
+            }).catch((e) => console.error('[Cam] attachRemote failed', e));
+
+            log(`Camera attached id=${device.device_id} ssrc=${device.author_ssrc}`);
+            return;
         }
-        else if (device.device_type == 4) { // Microphone
+
+        if (device.device_type == 2) { // Demonstration
+            if (!scr) {
+                console.warn('[Screen] CreatedDevice received but local capture is not started; dropping device');
+                ctrl.sendDisconnectDevice(device.device_id);
+                return;
+            }
+
+            if (scr._wantDisconnectOnAttach) {
+                ctrl.sendDisconnectDevice(device.device_id);
+                scr.stop().catch(() => { });
+                scr = null;
+                setState({ demoEnabled: false });
+                return;
+            }
+
+            scr.attachRemote({
+                server: ctrl.server,
+                token: ctrl.authToken,
+                deviceId: device.device_id,
+                ssrc: device.author_ssrc,
+                port: device.port,
+                keyHex: device.secure_key,
+            }).catch((e) => console.error('[Screen] attachRemote failed', e));
+
+            log(`Screen capture attached id=${device.device_id} ssrc=${device.author_ssrc}`);
+            return;
+        }
+
+        if (device.device_type == 4) { // Microphone
             mic = new MicrophoneSession({
                 server: ctrl.server,
                 token: ctrl.authToken,
@@ -695,14 +716,17 @@ async function startCam() {
     if (!ctrl) return;
 
     try {
-        const { stream, track, width, height, fps } = await pickCameraResolution({ fps: 25 });
+        if (!cam) {
+            cam = new CameraSession();
+        }
 
-        // Мы только пробовали захват — сразу всё отпускаем
-        if (track) track.stop();
-        if (stream) stream.getTracks().forEach(t => t.stop());
-
+        const { width, height } = await cam.startLocalCapture();
         const resolution = getResolution(width, height);
+
+        // Сначала подняли устройство и узнали фактическое разрешение — теперь говорим серверу
         ctrl.sendDeviceParamsCam({ name: 'Browser Cam', resolution });
+        setState({ camEnabled: true });
+        cam.setPreviewCanvas(document.getElementById('localPreview'));
     } catch (e) {
         console.error('startCam error:', e);
 
@@ -716,6 +740,8 @@ async function startCam() {
             msg = 'Текущие настройки камеры недоступны. Попробуйте другое разрешение или устройство.';
         }
 
+        try { await cam?.stop?.(); } catch { }
+        cam = null;
         setState({ camEnabled: false });
 
         showError(msg);
@@ -726,7 +752,16 @@ async function startCam() {
 function stopCam() {
     if (!ctrl) return;
     if (cam) {
-        ctrl.sendDisconnectDevice(cam.deviceId);
+        // deviceId появляется после CreatedDevice от сервера
+        if (cam.deviceId) {
+            ctrl.sendDisconnectDevice(cam.deviceId);
+        } else {
+            cam._wantDisconnectOnAttach = true;
+        }
+
+        cam.stop().catch(() => { });
+        cam = null;
+        setState({ camEnabled: false });
     }
 }
 
@@ -734,21 +769,27 @@ async function startScreenShare() {
     if (scr) return;
 
     try {
-        const resolution = getResolution(1680, 1050);
+        scr = new ScreenSession();
+
+        const { width, height } = await scr.startLocalCapture();
+        const resolution = getResolution(width, height);
+
         ctrl.sendDeviceParamsScr({ name: 'Screen Capture', resolution });
+        setState({ demoEnabled: true });
+        scr.setPreviewCanvas(document.getElementById('demoPreview'));
     } catch (e) {
         console.error('startScreenShare error:', e);
 
         let msg = 'Не удалось получить доступ к Захвату экрана';
 
-        if (e.name === 'NotReadableError') {
-            msg = 'Камера уже используется другим приложением или устройством. Закройте другое приложение с камерой и попробуйте ещё раз.';
-        } else if (e.name === 'NotAllowedError' || e.name === 'SecurityError') {
-            msg = 'Доступ к камере запрещён. Разрешите доступ к камере в настройках браузера и перезагрузите страницу.';
-        } else if (e.name === 'OverconstrainedError') {
-            msg = 'Текущие настройки камеры недоступны. Попробуйте другое разрешение или устройство.';
+        if (e.name === 'NotAllowedError' || e.name === 'AbortError' || e.name === 'SecurityError') {
+            msg = 'Захват экрана отменён или запрещён. Разрешите доступ к захвату экрана и попробуйте ещё раз.';
+        } else if (e.name === 'NotReadableError') {
+            msg = 'Захват экрана сейчас недоступен. Закройте приложения/вкладки, которые могут мешать, и попробуйте ещё раз.';
         }
 
+        try { await scr?.stop?.(); } catch { }
+        scr = null;
         setState({ demoEnabled: false });
 
         showError(msg);
@@ -759,7 +800,15 @@ async function startScreenShare() {
 async function stopScreenShare() {
     if (!ctrl) return;
     if (scr) {
-        ctrl.sendDisconnectDevice(scr.deviceId);
+        if (scr.deviceId) {
+            ctrl.sendDisconnectDevice(scr.deviceId);
+        } else {
+            scr._wantDisconnectOnAttach = true;
+        }
+
+        await scr.stop().catch(() => { });
+        scr = null;
+        setState({ demoEnabled: false });
     }
 }
 function disconnectFromConference() {
