@@ -4,7 +4,6 @@ export class CanvasRenderer {
     /**
      * @param {HTMLCanvasElement|string|null} canvasOrId
      * @param {object} opts
-     * @param {boolean} [opts.mirrorDefault=false]
      * @param {string}  [opts.clearColor='#000']
      * @param {boolean} [opts.autoDpr=false]        // подгонять canvas.width/height под CSS*DPR
      * @param {number}  [opts.maxPixels=2073600]    // 1920*1080 по умолчанию
@@ -13,7 +12,6 @@ export class CanvasRenderer {
      */
     constructor(canvasOrId, opts = {}) {
         this._opts = {
-            mirrorDefault: false,
             clearColor: '#000',
             autoDpr: false,
             maxPixels: 1920 * 1080,
@@ -115,7 +113,7 @@ export class CanvasRenderer {
      * Рисует bitmap в canvas с сохранением пропорций (contain + letterbox),
      * опционально зеркалит.
      */
-    drawBitmapContain(bitmap, { mirror = this._opts.mirrorDefault } = {}) {
+    drawBitmapContain(bitmap) {
         const canvas = this._canvas;
         const ctx = this._ctx;
         if (!canvas || !ctx || !bitmap) return;
@@ -154,17 +152,9 @@ export class CanvasRenderer {
             dy = 0;
         }
 
-        if (!mirror) {
-            // обычный draw
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.drawImage(bitmap, dx, dy, dw, dh);
-        } else {
-            // mirror по X без "съезда" положения: рисуем по скорректированному x
-            ctx.setTransform(-1, 0, 0, 1, cw, 0);
-            const mx = cw - dx - dw;
-            ctx.drawImage(bitmap, mx, dy, dw, dh);
-        }
-
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(bitmap, dx, dy, dw, dh);
+        
         // не оставляем transform "залипшим"
         ctx.setTransform(1, 0, 0, 1, 0, 0);
     }

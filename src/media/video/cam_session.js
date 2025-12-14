@@ -74,10 +74,9 @@ export class CameraSession {
     setPreviewCanvas(canvasEl) {
         if (!this._previewRenderer) {
             this._previewRenderer = new CanvasRenderer(canvasEl, {
-                mirrorDefault: true,
                 clearColor: '#000',
                 autoDpr: true,
-                observeResize: true,
+                observeResize: true
             });
         } else {
             this._previewRenderer.setCanvas(canvasEl);

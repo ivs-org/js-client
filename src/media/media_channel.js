@@ -152,7 +152,6 @@ export class MediaChannel {
 
         if (!this._previewRenderer) {
             this._previewRenderer = new CanvasRenderer(canvas, {
-                mirrorDefault: true,
                 clearColor: '#000',
                 autoDpr: true,
                 observeResize: true,

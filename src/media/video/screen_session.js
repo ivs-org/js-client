@@ -72,7 +72,6 @@ export class ScreenSession {
     setPreviewCanvas(canvasEl) {
         if (!this._previewRenderer) {
             this._previewRenderer = new CanvasRenderer(canvasEl, {
-                mirrorDefault: true,
                 clearColor: '#000',
                 autoDpr: true,
                 observeResize: true,

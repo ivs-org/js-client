@@ -726,7 +726,9 @@ async function startCam() {
         // Сначала подняли устройство и узнали фактическое разрешение — теперь говорим серверу
         ctrl.sendDeviceParamsCam({ name: 'Browser Cam', resolution });
         setState({ camEnabled: true });
-        cam.setPreviewCanvas(document.getElementById('localPreview'));
+        const c = document.getElementById('localPreview');
+        c?.classList.add('mirror-x');
+        cam.setPreviewCanvas(c);
     } catch (e) {
         console.error('startCam error:', e);
 

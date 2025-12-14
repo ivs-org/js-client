@@ -234,11 +234,16 @@ button.secondary {
     min-height: 0;
     overflow: hidden;
 }
-    .stream canvas {
-        flex: 1 1 auto; /* главный фикс: canvas занимает доступное место, а не диктует высоту */
-        min-height: 0;
-        display: block;
-    }
+.stream canvas {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: block;
+}
+
+.mirror-x {
+    transform: scaleX(-1);
+    transform-origin: center;
+}
 
 video {
     width: 100%;
