@@ -199,6 +199,7 @@ export const MessagesStorage = {
     async applyDeliveryMessages(messages) {
         if (!Array.isArray(messages) || !messages.length) return;
 
+        const newlyAdded = [];
         let changed = false;
 
         for (const src of messages) {
@@ -207,6 +208,8 @@ export const MessagesStorage = {
             const msg = normalizeMessage(src);
             const chatKey = computeChatKey(msg);
             if (!chatKey) continue;
+
+            msg.chatKey = chatKey;
 
             const existing = messagesByGuid.get(msg.guid);
             if (existing) {
@@ -228,6 +231,7 @@ export const MessagesStorage = {
                 }
             } else {
                 // новый месседж
+                newlyAdded.push(msg);
                 messagesByGuid.set(msg.guid, msg);
                 let arr = messagesByChatKey.get(chatKey);
                 if (!arr) {
@@ -250,5 +254,6 @@ export const MessagesStorage = {
         if (changed) {
             notify();
         }
+        return newlyAdded;
     },
 };

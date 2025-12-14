@@ -20,40 +20,53 @@ function saveCredsToStorage(server, login, pass, autoLogin) {
     }
 }
 
-function normalizeSortType(v) {
-    // enum SortType { 0 Undefined, 1 Name, 2 Number }
-    if (v === 1 || v === 'Name') return 'Name';
-    if (v === 2 || v === 'Number') return 'Number';
-    return 'Undefined';
-}
+function bumpUnreadCounts(newMsgs) {
+    if (!Array.isArray(newMsgs) || !newMsgs.length) return;
 
-function handleGroupList(msg) {
-    Storage.applyGroupList(msg.group_list || []).catch(err =>
-        console.warn('[Storage] applyGroupList failed', err)
-    );
-    setState({ lastSyncAt: Date.now() });
-}
+    const selfId = appState.user?.id;
+    if (!selfId) return;
 
-function handleContactList(msg) {
-    Storage.applyContactList(msg.contact_list || []).catch(err =>
-        console.warn('[Storage] applyContactList failed', err)
-    );
-    setState({ lastSyncAt: Date.now() });
-}
+    const activeType = appState.activeContactType;
+    const activeId = appState.activeContactId;
+    const activeTag = appState.activeConferenceTag;
 
-function handleConferencesList(msg) {
-    Storage.applyConferencesList(msg.conferences_list || []).catch(err =>
-        console.warn('[Storage] applyConferencesList failed', err)
-    );
-    setState({ lastSyncAt: Date.now() });
-}
+    // агрегируем, чтобы не писать в IndexedDB по 100 раз подряд
+    const dmDelta = new Map();   // memberId -> count
+    const confDelta = new Map(); // confId -> count
 
-function handleChangeMemberState(msg) {
-    MemberList.updateStates(msg.change_member_state);
-}
+    for (const m of newMsgs) {
+        // считаем unread только для входящих
+        if ((m.author_id ?? 0) === selfId) continue;
 
-function handleDeliveryMessages(msg) {
-    MessagesStorage.applyDeliveryMessages(msg.delivery_messages);
+        const ck = m.chatKey || '';
+        if (ck.startsWith('dm:')) {
+            const otherId = Number(ck.slice(3));
+            if (!otherId) continue;
+
+            if (activeType === 'member' && activeId === otherId) continue;
+
+            dmDelta.set(otherId, (dmDelta.get(otherId) || 0) + 1);
+            continue;
+        }
+
+        if (ck.startsWith('conf:')) {
+            const tag = ck.slice(5);
+            if (activeType === 'conference' && activeTag === tag) continue;
+
+            const confId = Storage.getConferenceIdByTag(tag);
+            if (!confId) continue;
+
+            confDelta.set(confId, (confDelta.get(confId) || 0) + 1);
+        }
+    }
+
+    // применяем дельты
+    for (const [id, d] of dmDelta) {
+        Storage.incrementMemberUnread(id, d).catch(() => { });
+    }
+    for (const [id, d] of confDelta) {
+        Storage.incrementConferenceUnread(id, d).catch(() => { });
+    }
 }
 
 export class ControlWS {
@@ -161,7 +174,7 @@ export class ControlWS {
             const txt = typeof ev.data === 'string' ? ev.data : await ev.data.text();
             let msg; try { msg = JSON.parse(txt); } catch { }
 
-            //console.log(txt);
+            console.log(txt);
 
             if (txt.includes('ping')) {
                 this._send({ ping: {} });
@@ -220,30 +233,58 @@ export class ControlWS {
 
             // Group list
             if (msg.group_list) {
-                handleGroupList(msg);
+                Storage.applyGroupList(msg.group_list || []).catch(err =>
+                    console.warn('[Storage] applyGroupList failed', err)
+                );
+                setState({ lastSyncAt: Date.now() });
                 return;
             }
 
             // Contact list
             if (msg.contact_list) {
-                handleContactList(msg);
+                Storage.applyContactList(msg.contact_list || []).catch(err =>
+                    console.warn('[Storage] applyContactList failed', err)
+                );
+                setState({ lastSyncAt: Date.now() });
+                return;
+            }
+
+            if (msg.change_contact_state) {
+                const { id, state } = msg.change_contact_state;
+
+                Storage.updateMember(id, { state })
+                    .catch((e) => console.warn('[Storage] updateMember(state) failed', e));
+
+                setState({ lastSyncAt: Date.now() });
                 return;
             }
 
             if (msg.change_member_state) {
-                handleChangeMemberState(msg);
+                MemberList.updateStates(msg.change_member_state);
+                setState({ lastSyncAt: Date.now() });
                 return;
             }
 
             // Conferences list
             if (msg.conferences_list) {
-                handleConferencesList(msg);
+                Storage.applyConferencesList(msg.conferences_list || []).catch(err =>
+                    console.warn('[Storage] applyConferencesList failed', err)
+                );
+                setState({ lastSyncAt: Date.now() });
                 return;
             }
 
             // Chat
             if (msg.delivery_messages) {
-                handleDeliveryMessages(msg);
+                try {
+                    const newMsgs = await MessagesStorage.applyDeliveryMessages(msg.delivery_messages);
+                    bumpUnreadCounts(newMsgs);
+                    if (newMsgs?.length) {
+                        this._emit('new_message', newMsgs);
+                    }
+                } catch (e) {
+                    console.warn('[MessagesStorage] applyDeliveryMessages failed', e);
+                }
                 return;
             }
         };

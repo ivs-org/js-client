@@ -319,6 +319,7 @@ function attachContactsHandlers(root) {
 
         switch (type) {
             case 'member':
+                Storage.updateMember(id, { unreaded_count: 0 }).catch(() => { });
                 setState({
                     activeContactId: id,
                     activeContactType: 'member',
@@ -329,6 +330,7 @@ function attachContactsHandlers(root) {
 
             case 'conference': {
                 const tag = row.getAttribute('data-node-tag') || null;
+                Storage.updateConference(id, { unreaded_count: 0 }).catch(() => { });
                 setState({
                     activeContactId: id,
                     activeContactType: 'conference',

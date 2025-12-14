@@ -21,6 +21,9 @@ import { MicrophoneSession } from './media/audio/mic_session.js';
 import { CameraSession } from './media/video/cam_session.js';
 import { ScreenSession } from './media/video/screen_session.js';
 import { getResolution } from './media/video/resolution.js';
+import { Ringer } from './ui/ringer/ringer.js';
+import { RingType } from './ui/ringer/ring_type.js';
+
 
 const MOBILE_BREAKPOINT = 900;
 
@@ -41,9 +44,7 @@ let ctrlEventUnsubscribers = [];
 
 const mediaSessions = new Map();
 
-function getStreamsEl() {
-    return document.getElementById('streams');
-}
+export const ringer = new Ringer({ baseUrl: '/assets/sounds', volume: 0.9 });
 
 /* ------------------------------------------------------------------
  * STORAGE: localStorage вместо cookie
@@ -86,7 +87,7 @@ async function initDataLayer() {
 /* ------------------------------------------------------------------
  * Точка входа
  * ------------------------------------------------------------------ */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     AudioShared.ensureContext();
     AudioShared.ensureWorklet();
 
@@ -106,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, { once: true });
 
-    initDataLayer();
+    await initDataLayer();
     initResponsiveLayout();
     initLayout();
     initButtonsPanelActions();
@@ -383,6 +384,7 @@ function wireControlEvents() {
         ctrl.on('deviceConnected', handleDeviceConnected),
         ctrl.on('deviceDisconnect', handleDeviceDisconnect),
         ctrl.on('deviceParams', handleDeviceParams),
+        ctrl.on('new_message', handleNewMessage),
         ctrl.on('error', handleControlError),
         ctrl.on('close', handleControlClose),
     );
@@ -435,6 +437,8 @@ function handleConnectToConferenceResponse(resp) {
     });
 
     localStorage.setItem('vg_current_conf', resp.tag);
+
+    ringer.Ring(RingType.Dial);
 
     startMic();
     startCam();
@@ -552,7 +556,7 @@ function handleDeviceConnected(device) {
         }
         mediaSessions.set(key, ms);
         ms.start((el) => {
-            const container = getStreamsEl();
+            const container = document.getElementById('streams');
             if (!container) {
                 console.warn('[Call] streams container not found');
                 return;
@@ -608,6 +612,10 @@ function handleDeviceParams(dp) {
     };
 
     ctrl.sendCreatedDevice(device_connect);
+}
+
+function handleNewMessage() {
+    ringer.Ring(RingType.NewMessage);
 }
 
 function handleControlError(err) {
@@ -824,6 +832,10 @@ function disconnectFromConference() {
     mediaSessions.clear();
 
     ctrl.sendDisconnectFromConference();
+
+    if (!!appState.activeCall) {
+        ringer.Ring(RingType.Hangup);
+    }
 
     const isMobile = appState.layoutMode === 'mobile';
 

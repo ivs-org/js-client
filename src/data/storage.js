@@ -8,19 +8,23 @@
 import { buildContactsTree } from '../ui/contacts_tree.js';
 
 const DB_NAME = 'videograce_offline';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_GROUPS = 'groups';
 const STORE_MEMBERS = 'contacts';
 const STORE_CONFS = 'conferences';
+const STORE_SETTINGS = 'settings';
 
 // --- In-memory кэш ---
 const groupsById = new Map();
 const membersById = new Map();
 const confsById = new Map();
+const confIdByTag = new Map();
+const settingsByKey = new Map();
 
 let contactsMeta = {
     sort_type: 1,       // 1=Name, 2=Number, 0=Undefined
     show_numbers: true,
+    conferencesRolled: true,
 };
 
 let dbPromise = null;
@@ -75,6 +79,9 @@ export function openDb() {
 
         req.onupgradeneeded = () => {
             const db = req.result;
+            if (!db.objectStoreNames.contains(STORE_SETTINGS)) {
+                db.createObjectStore(STORE_SETTINGS, { keyPath: 'key' });
+            }
             if (!db.objectStoreNames.contains(STORE_GROUPS)) {
                 db.createObjectStore(STORE_GROUPS, { keyPath: 'id' });
             }
@@ -131,6 +138,7 @@ export const Storage = {
 
         await openDb();
 
+        let settings = [];
         let groups = [];
         let members = [];
         let confs = [];
@@ -140,6 +148,7 @@ export const Storage = {
                 loadAllFromStore(STORE_GROUPS),
                 loadAllFromStore(STORE_MEMBERS),
                 loadAllFromStore(STORE_CONFS),
+                loadAllFromStore(STORE_SETTINGS),
             ]);
         } catch (err) {
             console.warn('[Storage] init load error', err);
@@ -147,6 +156,12 @@ export const Storage = {
             members = [];
             confs = [];
         }
+
+        settingsByKey.clear();
+        (settings || []).forEach(s => {
+            if (!s || typeof s.key === 'undefined') return;
+            settingsByKey.set(s.key, s.value);
+        });
 
         groupsById.clear();
         (groups || []).forEach(g => {
@@ -165,6 +180,10 @@ export const Storage = {
             if (!c || typeof c.id === 'undefined') return;
             confsById.set(c.id, c);
         });
+        confIdByTag.clear();
+        for (const c of confsById.values()) {
+            if (c?.tag) confIdByTag.set(c.tag, c.id);
+        }
 
         initialized = true;
         notify();
@@ -184,6 +203,7 @@ export const Storage = {
             groups: Array.from(groupsById.values()),
             members: Array.from(membersById.values()),
             conferences: Array.from(confsById.values()),
+            conferencesRolled: !!this.getSetting('ui.conferencesRolled', false),
         });
     },
 
@@ -199,10 +219,33 @@ export const Storage = {
         return { ...contactsMeta };
     },
 
+    // --- Настройки UI ---
+
+    getSetting(key, defValue = null) {
+        return settingsByKey.has(key) ? settingsByKey.get(key) : defValue;
+    },
+
+    async setSetting(key, value) {
+        settingsByKey.set(key, value);
+
+        await withStore(STORE_SETTINGS, 'readwrite', s => {
+            s.put({ key, value });
+        });
+
+        notify();
+    },
+
+    async toggleSettingBool(key, defValue = false) {
+        const cur = !!this.getSetting(key, defValue);
+        await this.setSetting(key, !cur);
+    },
+
     // --- Снапшоты с сервера ---
 
     async applyGroupList(groups) {
         if (!Array.isArray(groups)) groups = [];
+
+        const isRootGroup = (g) => Number(g?.parent_id ?? 0) === 0;
 
         const prev = new Map(groupsById);
 
@@ -211,7 +254,7 @@ export const Storage = {
             const old = prev.get(g.id);
             const merged = {
                 ...g,
-                rolled: old ? !!old.rolled : !!g.rolled,
+                rolled: old ? !!old.rolled : !isRootGroup(g),
             };
             groupsById.set(merged.id, merged);
         }
@@ -228,9 +271,15 @@ export const Storage = {
         const { members, sort_type, show_numbers } = contactList || {};
         const list = Array.isArray(members) ? members : [];
 
+        const prev = new Map(membersById); 
+
         membersById.clear();
         for (const m of list) {
-            membersById.set(m.id, m);
+            const old = prev.get(m.id);
+            membersById.set(m.id, {
+                ...m,
+                unreaded_count: old ? (old.unreaded_count || 0) : (m.unreaded_count || 0),
+            });
         }
 
         contactsMeta = {
@@ -269,9 +318,15 @@ export const Storage = {
             const old = prev.get(c.id);
             const merged = {
                 ...c,
-                rolled: old ? !!old.rolled : !!c.rolled,
+                rolled: old ? !!old.rolled : true,
+                unreaded_count: old ? (old.unreaded_count || 0) : (c.unreaded_count || 0),
             };
             confsById.set(merged.id, merged);
+        }
+
+        confIdByTag.clear();
+        for (const c of confsById.values()) {
+            if (c?.tag) confIdByTag.set(c.tag, c.id);
         }
 
         await withStore(STORE_CONFS, 'readwrite', s => {
@@ -282,6 +337,10 @@ export const Storage = {
         });
 
         notify();
+    },
+
+    getConferenceIdByTag(tag) {
+        return confIdByTag.get(tag) || null;
     },
 
     // --- Точечные обновления ---
@@ -299,7 +358,38 @@ export const Storage = {
         notify();
     },
 
+    async updateConference(id, patch) {
+        if (!confsById.has(id)) return;
+        const cur = confsById.get(id);
+        const upd = { ...cur, ...patch };
+        confsById.set(id, upd);
+
+        notify();
+
+        await withStore(STORE_CONFS, 'readwrite', s => {
+            s.put(upd);
+        });
+    },
+
+    async incrementMemberUnread(id, delta = 1) {
+        const cur = membersById.get(id);
+        if (!cur) return;
+        const next = (cur.unreaded_count || 0) + (delta | 0);
+        await this.updateMember(id, { unreaded_count: next });
+    },
+
+    async incrementConferenceUnread(id, delta = 1) {
+        const cur = confsById.get(id);
+        if (!cur) return;
+        const next = (cur.unreaded_count || 0) + (delta | 0);
+        await this.updateConference(id, { unreaded_count: next });
+    },
+
     async toggleGroupRolled(groupId) {
+        if (groupId === 'conf-root') {
+            await this.toggleSettingBool('ui.conferencesRolled', true);
+            return;
+        }
         if (!groupsById.has(groupId)) return;
         const cur = groupsById.get(groupId);
         const upd = { ...cur, rolled: !cur.rolled };
