@@ -8,6 +8,7 @@
 import { parseMediaFrame, MediaType, importAesGcmKey } from '../../transport/rtp_wsm_utils.js';
 import { CanvasRenderer } from './canvas_renderer.js';
 import { RTPSplitter } from '../../transport/rtp_splitter.js';
+import { Storage } from '../../data/storage.js';
 
 const EVEN = (v) => (typeof v === 'number' ? (v & ~1) : 0);
 export class CameraSession {
@@ -95,14 +96,32 @@ export class CameraSession {
         this._localRunning = true;
         this._closing = false;
 
-        this._stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: this._facingMode,
-                frameRate: { ideal: this.fps },
-                resizeMode: 'crop-and-scale'
-            },
-            audio: false
-        });
+        const camId = (Storage.getSetting && Storage.getSetting('media.cameraDeviceId', '')) || '';
+
+        const video = {
+            width: { ideal: this.width || 640 },
+            height: { ideal: this.height || 480 },
+            frameRate: { ideal: this.fps || 25 },
+            resizeMode: 'crop-and-scale',
+        };
+
+        if (camId) {
+            video.deviceId = { exact: camId };
+        }
+        // ВАЖНО: если camId пустой — вообще ничего не добавляем (без facingMode)
+
+        try {
+            this._stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+        } catch (e) {
+            // если exact deviceId умер — fallback на default
+            if (camId) {
+                console.warn('📷 selected camera failed, fallback to default:', e?.name || e);
+                delete video.deviceId;
+                this._stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+            } else {
+                throw e;
+            }
+        }
 
         this._track = this._stream.getVideoTracks()[0];
         if (!this._track) {
@@ -146,6 +165,13 @@ export class CameraSession {
 
         console.log(`📷 Camera local capture started: ${this.width}x${this.height}@${this.fps}`);
         return this.getCaptureInfo();
+    }
+
+    async restartCapture() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        if (this._closing) return;
+        await this._stopLocalCapture();
+        await this.startLocalCapture();
     }
 
     getCaptureInfo() {

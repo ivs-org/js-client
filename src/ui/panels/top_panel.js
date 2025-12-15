@@ -31,80 +31,48 @@ function getAvatarLetter(title) {
     return title.trim().charAt(0).toUpperCase();
 }
 
+function renderTopMenu(state) {
+    const open = !!state.topMenuOpen;
+    return `
+    <div class="topbar-menu-wrap">
+      <button type="button" class="topbar-menu-btn" id="btnTopMenu" aria-label="Меню">⋯</button>
+      <div class="topbar-menu ${open ? 'open' : ''}" id="topbarMenu">
+        <button class="topbar-menu-item" data-menu="open" data-section="general">Настройки</button>
+        <button class="topbar-menu-item" data-menu="open" data-section="permissions">Разрешения</button>
+        <button class="topbar-menu-item" data-menu="open" data-section="account">Аккаунт</button>
+        <button class="topbar-menu-item" data-menu="open" data-section="connection">Подключение</button>
+        <button class="topbar-menu-item" data-menu="open" data-section="recording">Запись</button>
+        <div class="topbar-menu-sep"></div>
+        <button class="topbar-menu-item" id="btnLogout">Выйти</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderBack(state) {
+    return state.layoutMode === 'mobile' ?
+    `<button
+          type="button"
+          class="topbar-back"
+          id="topbarBackBtn"
+          aria-label="Назад к контактам"
+        >←</button>` : ``;
+}
+
 export function renderTopbar(state) {
     const el = document.getElementById('appTopbar');
     if (!el) return;
 
     const mobile = appState.layoutMode === 'mobile';
-    const inCall = !!state.activeCall;
-    const chatOpen = true;// !!appEl?.classList.contains('chat-open');
-    // contactsOpen можно использовать, если нужно
-    // const contactsOpen = !!appEl?.classList.contains('contacts-open');
 
-    // === DESKTOP или режим звонка: показываем старый topbar ===
-    /*if (!mobile || inCall) {
-        let callTitle;
-
-        if (state.online) {
-            callTitle = state.activeCall
-                ? 'ВКС: ' + (state.activeCall.name || state.activeCall.tag)
-                : 'Нет активного звонка';
-        } else {
-            callTitle = 'Нет подключения к серверу';
-        }
-
-        const userName = getUserName(state);
-
-        el.innerHTML = `
-          <div class="topbar-desktop">
-            <div class="topbar-left">VideoGrace Web</div>
-            <div class="topbar-center">${callTitle}</div>
-            <div class="topbar-right">
-              <span class="topbar-user">${userName}</span>
-              <button id="btnOpenSettings">⚙</button>
-              <button id="btnLogout">Выйти</button>
-            </div>
-          </div>
-        `;
-        return;
-    }*/
-
-    // === МОБИЛКА + НЕТ ЗВОНКА: режим мессенджера ===
-
-    // 1) Экран контактов (chat не открыт)
-    if (!chatOpen) {
-        const userName = getUserName(state);
-
-        el.innerHTML = `
-          <div class="topbar-mobile topbar-contacts">
-            <div class="topbar-left">
-              <span class="topbar-app-title">VideoGrace</span>
-            </div>
-            <div class="topbar-center">
-              <span class="topbar-section">Контакты</span>
-            </div>
-            <div class="topbar-right">
-              <span class="topbar-user">${userName}</span>
-              <button id="btnOpenSettings">⚙</button>
-              <button id="btnLogout">⎋</button>
-            </div>
-          </div>
-        `;
-        return;
-    }
-
-    // 2) Экран чата
     const title = getActiveChatTitle(state);
     const avatarLetter = getAvatarLetter(title);
 
+    let topbarClass = mobile ? 'topbar-mobile' : 'topbar-desktop';
+
     el.innerHTML = `
-      <div class="topbar-mobile topbar-chat">
-        <button
-          type="button"
-          class="topbar-back"
-          id="topbarBackBtn"
-          aria-label="Назад к контактам"
-        >←</button>
+      <div class="${topbarClass}">
+        ${renderBack(state)}
 
         <div class="topbar-chat-main">
           <div class="topbar-avatar">${avatarLetter}</div>
@@ -113,27 +81,32 @@ export function renderTopbar(state) {
           </div>
         </div>
 
-        <button
-          type="button"
-          class="topbar-call"
-          id="btnToggleCall"
-          aria-label="Позвонить"
-        >📞</button>
-        |
-        <button
-          type="button"
-          id="btnLogout"
-          aria-label="Выход из системы"
-        >⎋</button>
+        <div class="topbar-right">
+          <button
+            type="button"
+            class="topbar-call"
+            id="btnToggleCall"
+            aria-label="Позвонить"
+          >📞</button>
+          <span class="topbar-sep"></span>
+          ${renderTopMenu(state)}
+        </div>
       </div>
     `;
+
+    const inCall = !!state.activeCall;
 
     // Кнопка "Назад"
     const backBtn = document.getElementById('topbarBackBtn');
     if (backBtn) {
         backBtn.onclick = () => {
             if (!mobile) return;
-            if (!!state.showChatPanel) {
+
+            if (!!state.topMenuOpen) {
+                setState({ topMenuOpen: false });
+            } else if (!!state.showSettingsPanel) {
+                setState({ showSettingsPanel: false });
+            } else if (!!state.showChatPanel) {
                 setState({
                     showChatPanel: false,
                     showContactsPanel: true,
@@ -146,6 +119,29 @@ export function renderTopbar(state) {
                     });
                 }
             }
+        };
+    }
+
+    const btnMenu = document.getElementById('btnTopMenu');
+    if (btnMenu) {
+        btnMenu.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setState({ topMenuOpen: !appState.topMenuOpen });
+        };
+    }
+
+    const menu = document.getElementById('topbarMenu');
+    if (menu) {
+        menu.onclick = (e) => {
+            const item = e.target.closest('[data-menu="open"]');
+            if (!item) return;
+            const sec = item.dataset.section || 'general';
+            setState({
+                topMenuOpen: false,
+                showSettingsPanel: true,
+                settingsSection: sec,
+            });
         };
     }
 }

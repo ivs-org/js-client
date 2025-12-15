@@ -24,6 +24,12 @@ export const appState = {
 
     user: null,
 
+    // Настройки
+    showSettingsPanel: false,
+    settingsSection: 'general', // camera | mic | speakers | connection | account | permissions | general | recording
+    topMenuOpen: false,
+    settingsRevision: 0,
+
     // Выбор в UI
     activeContactId: null,     // id выбранного Member или Conference
     activeContactType: null,   // 'member' | 'conference' | null

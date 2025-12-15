@@ -97,6 +97,23 @@ export class ControlWS {
         this._retry = 0;           // счётчик попыток
         this._reconnectTimer = null;
 
+        this._lastRxAt = 0;
+        this._lastPingAt = 0;
+        this._watchdogTimer = null;
+
+        this._staleTimeoutMs = 30_000;
+        this._watchdogPeriodMs = 5_000;
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) this._checkStale('resume');
+        });
+
+        window.addEventListener('online', () => {
+            // если сеть вернулась — поднимаем коннект (или починим “полуживой”)
+            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) this._connect();
+            else this._checkStale('online');
+        });
+
         this._connect();
     }
 
@@ -163,20 +180,33 @@ export class ControlWS {
         this.ws.binaryType = 'arraybuffer';
 
         this.ws.onopen = () => {
-            this._retry = 0; // сбросить бэкофф
-            console.log('control ws open, sending connect_request');
+            this._retry = 0;
+            this._bumpRx();
+            this._startWatchdog();
+            this._retry = 0;
+            
             this._send({ connect_request: { login: this.login, password: this.password, client_version: 1000 } });
+
+            console.log('control ws open, sending connect_request');
         };
 
         this.ws.onmessage = async (ev) => {
             if (ev.data instanceof ArrayBuffer) return;
+
+            this._bumpRx();
             
             const txt = typeof ev.data === 'string' ? ev.data : await ev.data.text();
             let msg; try { msg = JSON.parse(txt); } catch { }
 
-            console.log(txt);
+            //console.log(txt);
 
-            if (txt.includes('ping')) {
+            const isPing =
+                (msg && msg.ping) ||
+                (txt.trim() === 'ping') ||
+                (txt.includes('"ping"'));
+
+            if (isPing) {
+                this._bumpPing();
                 this._send({ ping: {} });
                 this._emit('ping');
                 return;
@@ -291,6 +321,7 @@ export class ControlWS {
 
         this.ws.onclose = (e) => {
             console.log('control ws closed', e.code, e.reason);
+            this._stopWatchdog();
             this._emit('close');
             if (!this._closing) this._scheduleReconnect();
         };
@@ -383,5 +414,45 @@ export class ControlWS {
             this.ws = null;
             try { ws.close(code, reason); } catch { }
         }
+    }
+
+    // Watchdog
+    _bumpRx() {
+        this._lastRxAt = Date.now();
+    }
+
+    _bumpPing() {
+        const now = Date.now();
+        this._lastRxAt = now;
+        this._lastPingAt = now;
+    }
+
+    _startWatchdog() {
+        this._stopWatchdog();
+        this._watchdogTimer = setInterval(() => this._checkStale('timer'), this._watchdogPeriodMs);
+    }
+
+    _stopWatchdog() {
+        if (this._watchdogTimer) {
+            clearInterval(this._watchdogTimer);
+            this._watchdogTimer = null;
+        }
+    }
+
+    _checkStale(reason) {
+        if (this._closing) return;
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+        const last = this._lastRxAt || this._lastPingAt || 0;
+        if (!last) return;
+
+        const age = Date.now() - last;
+        if (age <= this._staleTimeoutMs) return;
+
+        console.warn(`[control_ws] stale ws (${reason}), lastRx ${age}ms ago -> reconnect`);
+
+        // форс-реконнект: close может не прилететь, поэтому планируем reconnect сразу
+        try { this.ws.close(4001, 'stale'); } catch { }
+        this._scheduleReconnect();
     }
 }

@@ -144,7 +144,7 @@ export const Storage = {
         let confs = [];
 
         try {
-            [groups, members, confs] = await Promise.all([
+            [groups, members, confs, settings] = await Promise.all([
                 loadAllFromStore(STORE_GROUPS),
                 loadAllFromStore(STORE_MEMBERS),
                 loadAllFromStore(STORE_CONFS),
@@ -155,6 +155,7 @@ export const Storage = {
             groups = [];
             members = [];
             confs = [];
+            settings = [];
         }
 
         settingsByKey.clear();

@@ -9,6 +9,7 @@ import {
     importAesGcmKey, buildMediaFrame, makeRtp12, makeIvGcm, gcmEncrypt, concatU8,
     WsBinaryMsgType, MediaType
 } from '../../transport/rtp_wsm_utils.js';
+import { Storage } from '../../data/storage.js';
 
 export class MicrophoneSession {
     constructor({
@@ -41,6 +42,7 @@ export class MicrophoneSession {
         // Audio
         this.ctx = null;
         this.source = null;
+        this._stream = null;
         this.node = null;               // AudioWorkletNode('mic-chunker')
 
         // WS connection
@@ -67,7 +69,7 @@ export class MicrophoneSession {
 
     async stop() {
         this._shouldRun = false;
-        await this._stopCapture();   // гасим захват/энкодер
+        await this.stopCapture();   // гасим захват/энкодер
         try { this.ws?.close(); } catch { }
         this.ws = null;
         this._reconning = false;     // обрываем будущие попытки
@@ -91,7 +93,7 @@ export class MicrophoneSession {
                 if (typeof ev.data === 'string') {
                     let msg; try { msg = JSON.parse(ev.data); } catch { }
                     if (msg?.connect_response) {
-                        await this._startCapture();  // запустить микрофон + encoder
+                        await this.startCapture();  // запустить микрофон + encoder
                         return resolve();
                     }
                     if (ev.data.includes('ping')) this.ws?.send(JSON.stringify({ ping: {} }));
@@ -111,7 +113,7 @@ export class MicrophoneSession {
     }
 
     _onWsDown() {
-        this._stopCapture().catch(() => { });
+        this.stopCapture().catch(() => { });
 
         if (this._reconning) return;
         this._reconning = true;
@@ -139,22 +141,40 @@ export class MicrophoneSession {
         }
     }
 
-    async _startCapture() {
+    async startCapture() {
         if (this.encoder) return; // уже запущено
 
         // Audio graph + worklet
         this.ctx = new AudioContext({ sampleRate: 48000 });
         await this.ctx.audioWorklet.addModule('src/media/audio/mic_processor.js');
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                channelCount: { ideal: this.channels },
-                sampleRate: { ideal: 48000 },
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-                voiceIsolation: true
+
+        const micId = (Storage.getSetting && Storage.getSetting('media.micDeviceId', '')) || '';
+
+        const audio = {
+            channelCount: { ideal: this.channels },
+            sampleRate: { ideal: 48000 },
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            voiceIsolation: true
+        };
+
+        if (micId) audio.deviceId = { exact: micId };
+
+        let stream;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio });
+        } catch (e) {
+            if (micId) {
+                console.warn('🎤 getUserMedia with selected mic failed, fallback to default:', e?.name || e);
+                delete audio.deviceId;
+                stream = await navigator.mediaDevices.getUserMedia({ audio });
+            } else {
+                throw e;
             }
-        });
+        }
+
+        this._stream = stream;
 
         const track = stream.getAudioTracks()[0];
         const settings = track.getSettings(); // { sampleRate, channelCount, ... }
@@ -230,7 +250,14 @@ export class MicrophoneSession {
         console.log(`🎤 Microphone Capturing started`);
     }
 
-    async _stopCapture() {
+    async restartCapture() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        if (this._closing) return;
+        await this.stopCapture();
+        await this.startCapture();
+    }
+
+    async stopCapture() {
         this._closing = true;
 
         if (this.encoder) {
@@ -248,6 +275,11 @@ export class MicrophoneSession {
 
         try { await this.ctx?.close(); } catch { }
         this.ctx = null;
+
+        if (this._stream) {
+            try { this._stream.getTracks().forEach(t => t.stop()); } catch { }
+        }
+        this._stream = null;
 
         console.log(`🎤 Microphone Capturing stopped`);
     }

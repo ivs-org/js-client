@@ -23,6 +23,7 @@ import { ScreenSession } from './media/video/screen_session.js';
 import { getResolution } from './media/video/resolution.js';
 import { Ringer } from './ui/ringer/ringer.js';
 import { RingType } from './ui/ringer/ring_type.js';
+import { showMessageNotification } from './ui/notify/browser_notify.js';
 
 
 const MOBILE_BREAKPOINT = 900;
@@ -30,6 +31,10 @@ const MOBILE_BREAKPOINT = 900;
 let mic = null;
 let cam = null;
 let scr = null;
+
+let lastCamId = Storage.getSetting('media.cameraDeviceId', '');
+let lastMicId = Storage.getSetting('media.micDeviceId', '');
+let lastSpkId = Storage.getSetting('media.speakerDeviceId', '');
 
 const urlParams = new URLSearchParams(location.search);
 window.confTag = urlParams.get('conf') || 'show';
@@ -67,6 +72,25 @@ async function initDataLayer() {
         setState({
             contactsRevision: (appState.contactsRevision || 0) + 1,
         });
+
+        const camId = Storage.getSetting('media.cameraDeviceId', '');
+        const micId = Storage.getSetting('media.micDeviceId', '');
+        const spkId = Storage.getSetting('media.speakerDeviceId', '');
+
+        if (spkId !== lastSpkId) {
+            lastSpkId = spkId;
+            AudioShared.setOutputDevice?.(spkId); // применить сразу
+        }
+
+        if (camId !== lastCamId) {
+            lastCamId = camId;
+            if (cam && appState.camEnabled) cam.restartCapture?.(); // применить сразу, если камера уже включена
+        }
+
+        if (micId !== lastMicId) {
+            lastMicId = micId;
+            if (mic && appState.micEnabled) mic.restartCapture?.();
+        }
     });
 
     MemberList.subscribe(() => {
@@ -108,6 +132,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, { once: true });
 
     await initDataLayer();
+
+    AudioShared.setOutputDevice?.(Storage.getSetting('media.speakerDeviceId', ''));
+
     initResponsiveLayout();
     initLayout();
     initButtonsPanelActions();
@@ -204,6 +231,8 @@ function handleJoinConferenceClick() {
         return;
     }
 
+    AudioShared.kickFromGesture();
+
     const conf = Storage.getConference(activeContactId);
     if (!conf) return;
 
@@ -259,6 +288,9 @@ function initButtonsPanelActions() {
                 } else {
                     startMic();
                 }
+
+                AudioShared.kickFromGesture();
+
                 break;
 
             case 'btnLogout':
@@ -267,7 +299,7 @@ function initButtonsPanelActions() {
                 for (const m of mediaSessions.values()) m.close();
                 mediaSessions.clear();
                 
-                setState({ view: 'login' });
+                setState({ topMenuOpen: false, view: 'login' });
         }
     });
 }
@@ -614,8 +646,31 @@ function handleDeviceParams(dp) {
     ctrl.sendCreatedDevice(device_connect);
 }
 
-function handleNewMessage() {
+function formatMsgBody(m) {
+    if (!m) return '';
+    // если есть текст — покажем кусочек
+    if (m.text) return String(m.text).slice(0, 120);
+    return 'Откройте чат, чтобы посмотреть';
+}
+function handleNewMessage(newMsgs) {
     ringer.Ring(RingType.NewMessage);
+
+    const m = newMsgs[newMsgs.length - 1];
+
+    // минимально безопасный текст (чтобы не светить содержимое на лок-скрине)
+    const title = 'Новое сообщение';
+    const body = formatMsgBody(m);
+
+    showMessageNotification({
+        title,
+        body,
+        tag: m.chatKey ? `chat:${m.chatKey}` : undefined,
+        onClick: () => {
+            window.focus?.();
+            // ToDo: тут нужно открыть чат по m.chatKey
+            // openChatByChatKey(m.chatKey);
+        },
+    });
 }
 
 function handleControlError(err) {

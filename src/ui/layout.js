@@ -7,6 +7,7 @@ import { renderContactsPanel } from './panels/contacts_panel.js';
 import { renderChatPanel } from './panels/chat_panel.js';
 import { renderCallPanel } from './panels/call_panel.js';
 import { renderButtonsPanel } from './panels/buttons_panel.js';
+import { renderSettingsPanel } from './panels/settings_panel.js';
 
 export function initLayout() {
     const root = document.getElementById('appRoot');
@@ -40,25 +41,18 @@ function syncOverlayClasses(state) {
     if (!appRoot) return;
 
     const layoutMode = state.layoutMode || 'desktop';
-    const showContacts = !!state.showContactsPanel;
-    const showChat = !!state.showChatPanel;
 
-    // сбрасываем раньше навешанные классы
-    appRoot.classList.remove('contacts-open', 'chat-open');
+    appRoot.classList.remove('contacts-open', 'chat-open', 'settings-open');
 
-    if (layoutMode !== 'mobile') {
-        // на десктопе классы overlays не нужны — всё через flex
-        return;
+    if (layoutMode !== 'mobile') return;
+
+    if (state.showSettingsPanel) {
+        appRoot.classList.add('settings-open');
+        return; // settings важнее, чем contacts/chat
     }
 
-    // MOBILE: messenger + in-call используют одни и те же классы,
-    // разруливает CSS
-    if (showChat) {
-        appRoot.classList.add('chat-open');
-    }
-    if (showContacts) {
-        appRoot.classList.add('contacts-open');
-    }
+    if (state.showChatPanel) appRoot.classList.add('chat-open');
+    if (state.showContactsPanel) appRoot.classList.add('contacts-open');
 }
 
 function render(root, state) {
@@ -142,6 +136,8 @@ function renderMain(root, state) {
               </section>
               <section class="panel panel-right" id="panelChat"></section>
             </main>
+
+            <div class="settings-overlay" id="panelSettings"></div>
           </div>
         `;
         root.dataset.mainInit = '1';
@@ -153,6 +149,9 @@ function renderMain(root, state) {
     const contactsRoot = document.getElementById('panelContacts');
     const chatRoot = document.getElementById('panelChat');
     const callRoot = document.getElementById('panelCall');
+
+    const settingsRoot = document.getElementById('panelSettings');
+    renderSettingsPanel(settingsRoot, state);
 
     contactsRoot.classList.add('overlay-panel');
     chatRoot.classList.add('overlay-panel');
