@@ -1,6 +1,6 @@
 # js-client — Developer Docs
 
-## TL;DR
+## About
 Web client для VideoGrace: Control WS (сигналинг) + Media WS (RTP/RTCP поверх WSM) + WebCodecs (VP8/Opus) + AudioWorklet + CanvasRenderer.
 
 ## Requirements

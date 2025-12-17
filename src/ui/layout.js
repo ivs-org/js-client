@@ -157,16 +157,15 @@ function renderMain(root, state) {
     const settingsRoot = document.getElementById('panelSettings');
     renderSettingsPanel(settingsRoot, state);
 
-    contactsRoot.classList.add('overlay-panel');
-    chatRoot.classList.add('overlay-panel');
-
     renderButtonsPanel(buttonsRoot, state);
 
     if (contactsRoot) {
         contactsRoot.style.display = state.showContactsPanel ? '' : 'none';
+        contactsRoot.classList.add('overlay-panel');
     }
     if (chatRoot) {
         chatRoot.style.display = state.showChatPanel ? '' : 'none';
+        chatRoot.classList.add('overlay-panel');
     }
 
     renderContactsPanel(contactsRoot, state);

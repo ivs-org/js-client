@@ -52,7 +52,6 @@ Vanilla JS web-клиент для VideoGrace: мессенджер + конфе
 ### 2) Открыть в браузере
 http://localhost:8080/
 
-
 Для части API требуется secure context. http://localhost обычно подходит.
 
 ## Browser support
@@ -60,7 +59,7 @@ http://localhost:8080/
 Рекомендуется современный Chromium (Chrome / Edge / Yandex).
 
 WebCodecs / AudioWorklet / SharedArrayBuffer: зависят от браузера и контекста.
-Если что-то не работает — см. docs/DEBUGGING.md.
+Если что-то не работает — см. `docs/DEBUGGING.md`
 
 ## Project structure
 
@@ -78,18 +77,18 @@ High-level:
 
 ## Development principles (non-negotiable)
 
- - UI render is pure: ui/layout.js рисует DOM и шлёт команды. Рендер не делает await и не лезет в сеть/медиа/БД.
- - Resources have lifecycle: всё, что держит ресурсы (ws/decoder/track/worklet), имеет start/stop/close и они идемпотентны.
- - WebCodecs contract: каждый VideoFrame обязан быть close() во всех ветках (включая исключения).
- - AudioWorklet: перед new AudioWorkletNode(...) всегда await AudioShared.ensureWorklet().
+ - **UI render is pure:** ui/layout.js рисует DOM и шлёт команды. Рендер не делает await и не лезет в сеть/медиа/БД.
+ - **Resources have lifecycle:** всё, что держит ресурсы (ws/decoder/track/worklet), имеет start/stop/close и они идемпотентны.
+ - **WebCodecs contract:** каждый VideoFrame обязан быть close() во всех ветках (включая исключения).
+ - **AudioWorklet:** перед new AudioWorkletNode(...) всегда await AudioShared.ensureWorklet().
 
 ## Docs
 
- - docs/README.md — индекс
- - docs/ARCHITECTURE.md — слои и потоки
- - docs/PROTOCOL.md — control/media протокол
- - docs/MEDIA.md — WebCodecs/Worklet/lifecycle
- - docs/DEBUGGING.md — типовые симптомы и фиксы
+ - `docs/README.md` — индекс
+ - `docs/ARCHITECTURE.md` — слои и потоки
+ - `docs/PROTOCOL.md` — control/media протокол
+ - `docs/MEDIA.md` — WebCodecs/Worklet/lifecycle
+ - `docs/DEBUGGING.md` — типовые симптомы и фиксы
 
 ## Common troubleshooting
 

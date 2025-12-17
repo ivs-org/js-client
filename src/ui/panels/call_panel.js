@@ -3,13 +3,11 @@ export function renderCallPanel(root, state) {
     if (!root) return;
 
     const hasCall = !!state.activeCall;
-    const title = hasCall ? 'Видеоконференция' : 'Нет активного звонка';
-
+    
     // ищем глобальный контейнер под потоки
     const streams = document.getElementById('streams');
 
     root.innerHTML = `
-      <div class="call-header">${title}</div>
       <div class="call-body">
         <div class="call-streams-container"></div>
       </div>

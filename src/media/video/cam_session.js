@@ -142,19 +142,21 @@ export class CameraSession {
             await this.stop();
             throw new Error('[Cam] No video frames');
         }
+
         const firstFrame = first.value;
+        try {
+            const fw = (firstFrame.displayWidth || firstFrame.codedWidth || s.width || 640) | 0;
+            const fh = (firstFrame.displayHeight || firstFrame.codedHeight || s.height || 360) | 0;
 
-        const fw = (firstFrame.displayWidth || firstFrame.codedWidth || s.width || 640) | 0;
-        const fh = (firstFrame.displayHeight || firstFrame.codedHeight || s.height || 480) | 0;
+            this._encWidth = EVEN(fw) || fw;
+            this._encHeight = EVEN(fh) || fh;
+            this._needCrop = (this._encWidth !== fw) || (this._encHeight !== fh);
 
-        // encoder wants stable even dims
-        this._encWidth = EVEN(fw) || fw;
-        this._encHeight = EVEN(fh) || fh;
-        this._needCrop = (this._encWidth !== fw) || (this._encHeight !== fh);
-
-        // то, что сообщаем серверу и используем для рендера
-        this.width = this._encWidth;
-        this.height = this._encHeight;
+            this.width = this._encWidth;
+            this.height = this._encHeight;
+        } finally {
+            firstFrame.close();
+        }
 
         // если пользователь/ОС выключили камеру
         this._track.onended = () => {

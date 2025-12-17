@@ -214,7 +214,8 @@ export class MicrophoneSession {
         // принимать PCM от ворклета и формировать AudioData
         this.node.port.onmessage = (e) => {
             const { type } = e.data || {};
-            if (type !== 'pcm') return;
+            if (!this.encoder || type !== 'pcm') return;
+            
             const { frames /*int*/, channels /*Array<Float32Array>*/ } = e.data;
 
             // planar f32: склеиваем канальные плоскости последовательно

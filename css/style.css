@@ -621,8 +621,6 @@ video {
     align-items: center;
     gap: 8px;
     padding: 6px 8px;
-    border-bottom: 1px solid #222;
-    font-size: 13px;
 }
 
 .contacts-status {
@@ -671,7 +669,7 @@ video {
 
 .tab-btn {
     flex: 1 1 50%;
-    padding: 4px 6px;
+    padding: 4px 16px;
     font-size: 12px;
     border: none;
     background: #101010;
@@ -926,7 +924,6 @@ video {
     justify-content: space-between;
     padding: 6px 10px;
     background: #181818;
-    border-bottom: 1px solid #333;
     font-size: 14px;
     flex-wrap: nowrap;
 }
@@ -966,7 +963,6 @@ video {
     align-items: center;
     padding: 6px 8px;
     background: #181818;
-    border-bottom: 1px solid #333;
     font-size: 14px;
     gap: 8px;
 }
@@ -1105,7 +1101,7 @@ video {
         position: fixed;
         left: 0;
         right: 0;
-        top: var(--topbar-height, 44px); /* оставляем место под topbar */
+        top: calc(var(--topbar-height, 44px) + 18px); /* оставляем место под topbar */
         bottom: 0;
         z-index: 90;
         padding: 0 8px;
@@ -1136,7 +1132,7 @@ video {
         position: fixed;
         left: 0;
         right: 0;
-        top: var(--topbar-height, 44px);
+        top: calc(var(--topbar-height, 44px) + 18px);
         bottom: 0;
         display: none;
         flex-direction: column;
@@ -1181,6 +1177,10 @@ video {
     }
 
     .app.in-call .app-buttons {
+        display: flex;
+    }
+
+    .app.in-call .contacts-header {
         display: flex;
     }
 
@@ -1237,7 +1237,7 @@ video {
     display: none;
     position: absolute;
     right: 0;
-    top: calc(var(--topbar-height, 44px) + 6px);
+    top: calc(var(--topbar-height, 44px) + 8px);
     min-width: 220px;
     background: #0b1220;
     border: 1px solid #222;
@@ -1283,7 +1283,7 @@ video {
         position: fixed;
         left: 0;
         right: 0;
-        top: var(--topbar-height, 44px);
+        top: calc(var(--topbar-height, 44px) + 18px);
         bottom: 0;
         z-index: 200;
     }

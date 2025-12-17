@@ -61,29 +61,29 @@ export function renderContactsPanel(root, state) {
 
     root.innerHTML = `
       <div class="contacts-panel">
-      
-        <div class="contacts-tabs">
-          <button
-            class="tab-btn ${effectiveView === 'contacts' ? 'active' : ''}"
-            data-contacts-view="contacts"
-          >
-            Контакты
-          </button>
-          <button
-            class="tab-btn ${effectiveView === 'members' ? 'active' : ''} ${!hasActiveConference ? 'disabled' : ''}"
-            data-contacts-view="members"
-            ${!hasActiveConference ? 'disabled' : ''}
-          >
-            Участники
-          </button>
-          <button
-            type="button"
-            class="panel-close-btn"
-            data-action="close-contacts"
-            title="Скрыть список контактов"
-          >✕</button>
+        <div class="contacts-header">
+          <div class="contacts-tabs">
+            <button
+              class="tab-btn ${effectiveView === 'contacts' ? 'active' : ''}"
+              data-contacts-view="contacts"
+            >
+              Контакты
+            </button>
+            <button
+              class="tab-btn ${effectiveView === 'members' ? 'active' : ''} ${!hasActiveConference ? 'disabled' : ''}"
+              data-contacts-view="members"
+              ${!hasActiveConference ? 'disabled' : ''}
+            >
+              Участники
+            </button>
+            <button
+              type="button"
+              class="panel-close-btn"
+              data-action="close-contacts"
+              title="Скрыть список контактов"
+            >✕</button>
+          </div>
         </div>
-
         ${effectiveView === 'contacts' ? contactsHtml : membersHtml}
       </div>
     `;

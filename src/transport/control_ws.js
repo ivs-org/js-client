@@ -109,10 +109,15 @@ export class ControlWS {
         });
 
         window.addEventListener('online', () => {
-            // если сеть вернулась — поднимаем коннект (или починим “полуживой”)
-            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) this._connect();
-            else this._checkStale('online');
+            // сеть вернулась — не ждём 30s stale, а форсим реконнект
+            this._forceReconnect('online');
         });
+
+        window.addEventListener('offline', () => {
+            // не ставим _closing, иначе автореконнект умрёт навсегда
+            try { this.ws && this.ws.close(4000, 'offline'); } catch { }
+        });
+
 
         this._connect();
     }
@@ -169,7 +174,25 @@ export class ControlWS {
         console.log(`[control] reconnect in ${delay} ms (attempt ${this._retry})`);
     }
 
+    _forceReconnect(reason) {
+        if (this._closing) return;
+
+        clearTimeout(this._reconnectTimer);
+        this._reconnectTimer = null;
+        this._stopWatchdog();
+
+        const ws = this.ws;
+        this.ws = null;
+
+        try { ws && ws.close(4002, `force:${reason}`); } catch { }
+
+        this._retry = 0;
+        this._connect(); // сразу
+    }
+
     _connect() {
+        if (!navigator.onLine) return;
+
         // защита от двойного коннекта
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return;
