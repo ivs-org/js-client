@@ -1,67 +1,102 @@
-# @videograce/client
+# js-client (VideoGrace Web Client)
 
-[![npm](https://img.shields.io/npm/v/@videograce/client)](https://www.npmjs.com/package/@videograce/client)
-[![npm](https://img.shields.io/npm/dm/@videograce/client)](https://www.npmjs.com/package/@videograce/client)
+Vanilla JS web-клиент для VideoGrace: мессенджер + конференции + realtime media (VP8/Opus) через WebSockets, WebCodecs и AudioWorklet. Без React, без сборщиков, без лишних зависимостей — только браузер и дисциплина lifecycle.
 
-Клиентская библиотека VideoGrace для подключения к узлам связи (WSS), обмена сообщениями и медиа в браузере. Без сборки, чистый ESM.
+## Key features
+- **Control WS (signaling):** логин, состояние контактов/участников, сообщения, unread counters, реакции/ивенты
+- **Media WS:** отдельные каналы под audio/video устройства
+- **Video:** RTP → VP8 decode (WebCodecs) → CanvasRenderer (contain/autoDpr)
+- **Audio:** Opus decode → ring buffer (SAB) → AudioWorklet → speakers
+- **Settings UI:** камера/микрофон/динамики, permissions, UI-состояния (rolled и т.п.) через Storage
+- **Browser Notifications** (по политике проекта — обычно только когда `document.hidden === true`)
+- **Screen Wake Lock** во время активного звонка (где поддерживается)
 
-- Сайт: https://videograce.ru
-- GitHub: https://github.com/ivs-org/
+## Quick start (dev)
+Нужен статический сервер **с заголовками COOP/COEP/CORP** (для SharedArrayBuffer / AudioWorklet и стабильной работы realtime media). Открывать `file://` не рекомендуется.
 
----
+### Вариант A: Node (http-server) + headers
+1) Установить (один раз):
+- `npm i -g http-server`
 
-## Быстрый старт
+2) Запуск:
+- `http-server . -p 8080 --cors -H "Cross-Origin-Opener-Policy: same-origin" -H "Cross-Origin-Embedder-Policy: require-corp" -H "Cross-Origin-Resource-Policy: same-origin"`
 
-### Вариант A — через npm
+Открыть:
+- `http://localhost:8080/`
 
-```bash
-npm i @videograce/client
+### Вариант B: Nginx (рекомендовано)
+Пример server block:
 
-// ESM
-import { version /*, ...API */ } from '@videograce/client';
+    server {
+        listen 8080;
+        server_name localhost;
 
-console.log('VideoGrace client', version);
-```
+        root /path/to/repo;
+        index index.html;
 
-### Вариант B — без Node, прямо из CDN (jsDelivr)
+        # COOP/COEP/CORP (для SAB/Worklet)
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+        add_header Cross-Origin-Resource-Policy same-origin always;
 
-```html
-<script type="importmap">
-{
-  "imports": {
-    "@videograce/client": "https://cdn.jsdelivr.net/npm/@videograce/client@latest/dist/index.js"
-  }
-}
-</script>
+        location / {
+            try_files $uri $uri/ =404;
+        }
 
-<script type="module">
-  import { version /*, ...API */ } from "@videograce/client";
-  console.log('VideoGrace client', version);
-</script>
-```
+        # OPTIONS preflight (если используете CORS запросы)
+        if ($request_method = OPTIONS) {
+            return 204;
+        }
+    }
 
-CDN отдаёт файлы из npm. Никаких сборщиков, Babel и прочего не требуется.
+### 2) Открыть в браузере
+http://localhost:8080/
 
-## Требования
 
-Современный браузер с поддержкой ES modules.
+Для части API требуется secure context. http://localhost обычно подходит.
 
-HTTPS и пользовательский жест для доступа к микрофону/камере.
+## Browser support
 
-## Совместимость/подход
+Рекомендуется современный Chromium (Chrome / Edge / Yandex).
 
-ESM-only. Если нужен CJS/UMD — создайте issue в репозитории.
+WebCodecs / AudioWorklet / SharedArrayBuffer: зависят от браузера и контекста.
+Если что-то не работает — см. docs/DEBUGGING.md.
 
-Минимум зависимостей. Рекомендуемый способ подключения — importmap/CDN или через npm в вашем бандлере.
+## Project structure
 
-## Версионирование
+High-level:
 
-SemVer: MAJOR.MINOR.PATCH. Минорные версии могут добавлять API; мажор — ломающие изменения.
+    src/
+        app.js                  # orchestration
+        control/                # ControlWS + handlers
+        media/                  # MediaChannel + sessions + renderers
+        codecs/                 # VP8/Opus decoders
+        data/                   # Storage (IndexedDB) + migrations
+        ui/                     # layout + panels + overlays + monitors
+    docs/
+        README.md               # developer docs index
 
-## Безопасность
+## Development principles (non-negotiable)
 
-Уязвимость или подозрение — напишите на security@videograce.ru
+ - UI render is pure: ui/layout.js рисует DOM и шлёт команды. Рендер не делает await и не лезет в сеть/медиа/БД.
+ - Resources have lifecycle: всё, что держит ресурсы (ws/decoder/track/worklet), имеет start/stop/close и они идемпотентны.
+ - WebCodecs contract: каждый VideoFrame обязан быть close() во всех ветках (включая исключения).
+ - AudioWorklet: перед new AudioWorkletNode(...) всегда await AudioShared.ensureWorklet().
 
-## Лицензия
+## Docs
+
+ - docs/README.md — индекс
+ - docs/ARCHITECTURE.md — слои и потоки
+ - docs/PROTOCOL.md — control/media протокол
+ - docs/MEDIA.md — WebCodecs/Worklet/lifecycle
+ - docs/DEBUGGING.md — типовые симптомы и фиксы
+
+## Common troubleshooting
+
+ - Device lists пустые в Settings: разрешения ещё не выданы → запросить permissions и обновить devices.
+
+См. подробности: docs/DEBUGGING.md.
+
+## License
 
 MIT
