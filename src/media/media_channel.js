@@ -17,6 +17,8 @@ import {
 
 export class MediaChannel {
     constructor({ url, port, token, channelType, deviceId, clientId, label, receiver_ssrc, author_ssrc, cryptoKey }) {
+        this.started = false;
+
         this.url = url; // base ws URL (ws://host:port)
         this.port = port; // media port from device_connected
         this.token = token;
@@ -35,9 +37,9 @@ export class MediaChannel {
 
         this.closing = false;
         this.ws = null;
-        this._bgPaused = false;
-        this._hasCrypto = cryptoKey !== "";
-        if (this._hasCrypto) this._cryptoKeyPromise = importAesGcmKey(cryptoKey);
+        this.bgPaused = false;
+        this.hasCrypto = cryptoKey !== "";
+        if (this.hasCrypto) this._cryptoKeyPromise = importAesGcmKey(cryptoKey);
 
         if (channelType === 'audio') {
             this.decoder = new OpusDecoder((frame) => this._onAudioFrame(frame));
@@ -51,7 +53,7 @@ export class MediaChannel {
                 this._sendForceKeyFrame();
             });
             this.containerEl = null;
-            this._previewRenderer = null;
+            this._canvasRenderer = null;
             console.log(`✓ [MediaChannel] Video channel constructed: ${label}`);
         }
 
@@ -59,36 +61,29 @@ export class MediaChannel {
     }
 
     pauseForBackground() {
-        if (this.channelType !== 'video' || this._bgPaused) return;
-        this._bgPaused = true;
+        if (this.channelType !== 'video' || this.bgPaused) return;
+        this.bgPaused = true;
 
-        // Закрыть media WS, остановить декодер и коллектор, но DOM оставить
-        _closeWebSocket();
+        this._closeWebSocket(1000, 'bg pause');
 
-        if (this.vp8Decoder && this.vp8Decoder.decoder) {
-            try { this.vp8Decoder.decoder.close(); } catch { }
-        }
-
-        // сбросить внутренние состояния
-        if (this.collector && typeof this.collector.reset === 'function') {
-            this.collector.reset();
-        }
+        try { this.decoder?.close?.(); } catch { }
+        if (this.collector?.reset) this.collector.reset();
     }
 
     async resumeFromForeground() {
-        if (this.channelType !== 'video' || !this._bgPaused) return;
-        this._bgPaused = false;
+        if (this.channelType !== 'video' || !this.bgPaused) return;
+        this.bgPaused = false;
 
-        // пересоздать декодер
-        this.vp8Decoder = new VP8Decoder(() => {
-            console.warn('⚠️ Requesting Force Key Frame due to decoder errors (resume)');
-        });
-
-        // Реинициализировать WS
+        this.decoder = new VP8Decoder(() => this._sendForceKeyFrame());
         this._connectWS();
     }
 
-    _initAudio() {
+    async initAudio() {
+        if (this.workletNode || this.ring) return;
+
+        this.audioCtx = AudioShared.ensureContext();
+        await AudioShared.ensureWorklet(); // <-- гарантирует регистрацию 'audio-processor'
+
         const channels = 2;
         const capacity = 48000; // 1 сек/канал
 
@@ -131,6 +126,13 @@ export class MediaChannel {
     }
 
     start(onAttached) {
+        if (this.started) {
+            console.warn(`${this.label} (${this.channelType}) already started`);
+            return;
+        }
+
+        this.started = true;
+
         if (this.channelType === 'audio') {
             this._connectWS();
             console.log(`🎧 Audio channel started: ${this.label}`);
@@ -150,14 +152,14 @@ export class MediaChannel {
         wrapper.appendChild(canvas);
         this.containerEl = wrapper;
 
-        if (!this._previewRenderer) {
-            this._previewRenderer = new CanvasRenderer(canvas, {
+        if (!this._canvasRenderer) {
+            this._canvasRenderer = new CanvasRenderer(canvas, {
                 clearColor: '#000',
                 autoDpr: true,
                 observeResize: true,
             });
         } else {
-            this._previewRenderer.setCanvas(canvas);
+            this._canvasRenderer.setCanvas(canvas);
         }
         
         if (onAttached) onAttached(wrapper);
@@ -167,27 +169,24 @@ export class MediaChannel {
     }
 
     /**
-    * Закрыть WebSocket корректно и гарантированно.
+    * Закрыть WebSocket корректно и гарантированно
     * @param {number} code - код закрытия (например, 1000)
     * @param {string} reason - причина
-    * @param {number} timeoutMs - сколько ждать onclose прежде чем сдаться
     */
-    _closeWebSocket(code = 1000, reason = 'client stop', timeoutMs = 500) {
+    _closeWebSocket(code = 1000, reason = 'client stop') {
         const ws = this.ws;
         if (!ws) return;
 
-        this._closing = true;      // сигнал остальным хэндлерам «ничего не делать»
+        this.closing = true;      // сигнал остальным хэндлерам «ничего не делать»
         this.worked = false;       // чтобы onclose не переподнял
 
         // убираем автопереподключение
-        if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
+        if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
 
         // отписываем обработчики (чтобы ничего не пересоздали)
         ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null;
 
-        try {
-            // ws.send(JSON.stringify({ disconnect_request: {} }));
-        } catch { }
+        try { ws.send(JSON.stringify({ disconnect: {} })); } catch { console.warn(`${this.channelType} media ws error send disconnect`); }
 
         // если соединение ещё не OPEN — дождёмся onopen и сразу закроем
         if (ws.readyState === WebSocket.CONNECTING) {
@@ -196,29 +195,25 @@ export class MediaChannel {
                 try { ws.close(code, reason); } catch { }
             }, { once: true });
         } else {
-            try { ws.close(code, reason); } catch { }
+            try {
+                ws.close(code, reason);
+                console.log(`🎬 ${this.channelType} websocket closed: ${this.label}`);
+            } catch { }
         }
 
-        // «жёсткая» сдача: если onclose не прилетел за timeout — просто забываем ссылку
-        setTimeout(() => {
-            if (this.ws === ws) {
-                console.warn('media ws close timeout — forcing detach');
-                this.ws = null;
-                this._closing = false;
-            }
-        }, timeoutMs);
+        this.ws = null;
+        this.closing = false;
     }
 
     stop() {
         this.worked = false;
-        console.log(`🎬 Media channel stopped: ${this.label}`);
-
-        this._closeWebSocket(1000, 'client stop', 800);
+        
+        this._closeWebSocket(1000, 'client stop');
 
         if (this.workletNode) this.workletNode.disconnect();
         if (this.gainNode) this.gainNode.disconnect();
         if (this.decoder) {
-            try { this.decoder.close(); } catch { }
+            this.decoder.close();
             this.decoder = null;
         }
 
@@ -233,7 +228,9 @@ export class MediaChannel {
         }
         this.containerEl = null;
 
-        console.log("✓ Media channel fully stopped and cleaned up.");
+        this.started = false;
+
+        console.log(`🎬 ${this.channelType} channel stopped: ${this.label}`);
     }
 
     _sendRTPInit() {
@@ -331,7 +328,9 @@ export class MediaChannel {
                         this.ws.send(JSON.stringify({ ping: {} }));
                     }
                 }
-                if (txt.includes('ping')) this.ws.send(JSON.stringify({ ping: {} }));
+                if (txt.includes('ping')) {
+                    this.ws.send(JSON.stringify({ ping: {} }));
+                }
                 return;
             }
 
@@ -342,9 +341,9 @@ export class MediaChannel {
             const hlen = rtpHeaderLen(rtp);
             if (hlen < 12 || hlen > rtp.length) return;
 
-            if (!this._hasCrypto) {
+            if (!this.hasCrypto) {
                 if (this.channelType === 'video') {
-                    if (this._bgPaused) return;
+                    if (this.bgPaused) return;
 
                     const hdr = rtp.subarray(0, hlen);
                     const plain = rtp.subarray(hlen);
@@ -382,7 +381,7 @@ export class MediaChannel {
                 return;
             }
             if (this.channelType === 'video') {
-                if (this._bgPaused) return;
+                if (this.bgPaused) return;
 
                 const hdr = rtp.subarray(0, hlen);
                 const plain = new Uint8Array(plainBuf);  // результат AES-GCM (VP8 payload)
@@ -419,13 +418,17 @@ export class MediaChannel {
     async _onVideoFrame(encodedFrame) {
         try {
             const frame = await this.decoder.decode(encodedFrame);
-            if (!frame || !this._previewRenderer) return;
+            if (!frame) return;
+            if (!this._canvasRenderer) {
+                frame.close();
+                return;
+            }
 
             const bitmap = await createImageBitmap(frame);
             try {
-                this._previewRenderer.drawBitmapContain(bitmap);
+                this._canvasRenderer.drawBitmapContain(bitmap);
             } finally {
-                bitmap.close?.();
+                bitmap?.close?.();
                 frame.close();
             }
         } catch (e) {

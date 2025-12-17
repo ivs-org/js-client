@@ -74,6 +74,10 @@ export function renderTopbar(state) {
       <div class="${topbarClass}">
         ${renderBack(state)}
 
+        <span class="contacts-status ${state.online ? 'online' : 'offline'}">
+          ${state.online ? 'Онлайн' : 'Оффлайн'}
+        </span>
+
         <div class="topbar-chat-main">
           <div class="topbar-avatar">${avatarLetter}</div>
           <div class="topbar-chat-title" title="${title}">

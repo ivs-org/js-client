@@ -410,9 +410,12 @@ export class ControlWS {
         clearTimeout(this._reconnectTimer);
         this._reconnectTimer = null;
         if (this.ws) {
-            const ws = this.ws;
+            try {
+                this.ws.send(JSON.stringify({ disconnect: {} }));
+                this.ws.close(code, reason);
+            } catch { }
+
             this.ws = null;
-            try { ws.close(code, reason); } catch { }
         }
     }
 

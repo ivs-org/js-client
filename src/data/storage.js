@@ -340,6 +340,10 @@ export const Storage = {
         notify();
     },
 
+    getMemberById(id) {
+        return membersById.get(id) || null;
+    },
+
     getConferenceIdByTag(tag) {
         return confIdByTag.get(tag) || null;
     },

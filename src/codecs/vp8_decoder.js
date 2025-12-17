@@ -14,7 +14,12 @@ export class VP8Decoder {
         this.onDecoderError = onDecoderError; // callback, например => mediaChannel.sendForceKeyFrame()
 
         this.decoder = new VideoDecoder({
-            output: frame => { this._lastFrame = frame; },
+            output: frame => {
+                if (this._lastFrame) {
+                    try { this._lastFrame.close(); } catch { }
+                }
+                this._lastFrame = frame;
+            },
             error: e => this._handleError(e)
         });
 
@@ -22,6 +27,17 @@ export class VP8Decoder {
             this.decoder.configure({ codec: 'vp8' });
         } catch (e) {
             console.warn('configure decoder failed', e);
+        }
+    }
+
+    close() {
+        if (this._lastFrame) {
+            try { this._lastFrame.close(); } catch { }
+            this._lastFrame = null;
+        }
+        if (this.decoder) {
+            try { this.decoder.close(); } catch { }
+            this.decoder = null;
         }
     }
 

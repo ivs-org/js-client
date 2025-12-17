@@ -243,7 +243,10 @@ export class CameraSession {
         this._canEncode = false;
 
         // stop remote
-        try { this.ws?.close(); } catch { }
+        try {
+            this.ws?.send(JSON.stringify({ disconnect: {} }));
+            this.ws?.close();
+        } catch { }
         this.ws = null;
         this._reconning = false;
         this._wsAttempts = 0;

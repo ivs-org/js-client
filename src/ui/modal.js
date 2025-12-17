@@ -5,24 +5,71 @@
  * Copyright (C), Infinity Video Soft LLC, 2025
  */
 
-export function showModal(title, message) {
-    // модалка
-    const modalEl = document.getElementById('appModal');
-    const modalTitleEl = document.getElementById('appModalTitle');
-    const modalBodyEl = document.getElementById('appModalBody');
-    const modalOkBtn = document.getElementById('appModalOk');
+import { setState } from '../core/app_state.js';
 
-    modalTitleEl.textContent = title || 'Сообщение';
-    modalBodyEl.textContent = message || '';
-    modalEl.classList.remove('hidden');
+let _resolver = null;
 
-    const handler = () => {
-        modalEl.classList.add('hidden');
-        modalOkBtn.removeEventListener('click', handler);
+export function _resolveModal(result) {
+    if (_resolver) {
+        const r = _resolver;
+        _resolver = null;
+        try { r(result); } catch { }
+    }
+}
+
+export function showModal(opts) {
+    // если уже висит модалка — закрываем предыдущую (чтобы не копить)
+    _resolveModal(false);
+
+    const o = opts || {};
+    const modal = {
+        open: true,
+        variant: o.variant || 'info',
+        title: o.title || '',
+        message: o.message || '',
+        okText: o.okText || 'OK',
+        cancelText: o.cancelText || 'Нет',
+        showCancel: !!o.showCancel,
+        avatarUrl: o.avatarUrl || '',
+        avatarLetter: o.avatarLetter || '',
     };
-    modalOkBtn.addEventListener('click', handler, { once: true });
+
+    setState({ modal });
+
+    return new Promise((resolve) => {
+        _resolver = resolve;
+    });
 }
 
 export function showError(message) {
-    showModal('Ошибка', message);
+    return showModal({
+        variant: 'error',
+        title: 'Ошибка',
+        message: message || '',
+        okText: 'OK',
+        showCancel: false,
+    });
+}
+
+export function showOk(title, message) {
+    return showModal({
+        variant: 'success',
+        title: title || 'Готово',
+        message: message || '',
+        okText: 'OK',
+        showCancel: false,
+    });
+}
+
+export function confirmDialog(opts) {
+    return showModal({
+        variant: 'confirm',
+        title: opts?.title || 'Подтвердите',
+        message: opts?.message || '',
+        okText: opts?.okText || 'Да',
+        cancelText: opts?.cancelText || 'Нет',
+        showCancel: true,
+        avatarUrl: opts?.avatarUrl || '',
+        avatarLetter: opts?.avatarLetter || '',
+    });
 }

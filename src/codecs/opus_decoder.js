@@ -25,6 +25,13 @@ export class OpusDecoder {
         }
     }
 
+    close() {
+       if (this.decoder) {
+            try { this.decoder.close(); } catch { }
+            this.decoder = null;
+        }
+    }
+
     decode(encodedFrame) {
         if (!this.decoder || this.decoder.state === "closed") return null;
 

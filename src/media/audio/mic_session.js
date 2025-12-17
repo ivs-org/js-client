@@ -70,7 +70,10 @@ export class MicrophoneSession {
     async stop() {
         this._shouldRun = false;
         await this.stopCapture();   // гасим захват/энкодер
-        try { this.ws?.close(); } catch { }
+        try {
+            this.ws?.send(JSON.stringify({ disconnect: {} }));
+            this.ws?.close();
+        } catch { }
         this.ws = null;
         this._reconning = false;     // обрываем будущие попытки
         this._wsAttempts = 0;

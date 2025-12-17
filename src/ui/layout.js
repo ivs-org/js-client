@@ -8,6 +8,7 @@ import { renderChatPanel } from './panels/chat_panel.js';
 import { renderCallPanel } from './panels/call_panel.js';
 import { renderButtonsPanel } from './panels/buttons_panel.js';
 import { renderSettingsPanel } from './panels/settings_panel.js';
+import { renderModalOverlay } from './modal_overlay.js';
 
 export function initLayout() {
     const root = document.getElementById('appRoot');
@@ -66,6 +67,9 @@ function render(root, state) {
         updateCallLayout(state);
         renderMain(root, state);
     }
+
+    const overlayRoot = document.getElementById('overlayRoot');
+    renderModalOverlay(overlayRoot, state);
 }
 
 function updateLocalPreview(state) {

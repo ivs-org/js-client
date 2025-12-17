@@ -18,6 +18,18 @@ export const appState = {
         autoLogin: true,
     },
 
+    modal: {
+        open: false,
+        variant: 'info',       // 'error' | 'success' | 'info' | 'confirm'
+        title: '',
+        message: '',
+        okText: 'OK',
+        cancelText: 'Отмена',
+        showCancel: false,
+        avatarUrl: '',
+        avatarLetter: '',
+    },
+
     // Онлайн/оффлайн
     online: false,             // true = есть активный ControlWS
     lastSyncAt: null,          // timestamp последней успешной синхронизации контактов

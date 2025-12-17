@@ -19,7 +19,6 @@ export function renderContactsPanel(root, state) {
     if (!root) return;
 
     const {
-        online,
         lastSyncAt,
         activeContactId,
         activeContactType,
@@ -51,19 +50,18 @@ export function renderContactsPanel(root, state) {
         conferenceMembers
     );
 
-    root.innerHTML = `
-      <div class="contacts-panel">
-        <div class="contacts-header">
+    /*
+    <div class="contacts-header">
           <span class="contacts-title">Контакты</span>
-          <span class="contacts-status ${online ? 'online' : 'offline'}">
-            ${online ? 'Онлайн' : 'Оффлайн'}
-          </span>
           ${lastSyncAt
             ? `<span class="contacts-sync-time">обновлено ${formatTime(lastSyncAt)}</span>`
-            : ''
-        }
+            : ''}
         </div>
+    */
 
+    root.innerHTML = `
+      <div class="contacts-panel">
+      
         <div class="contacts-tabs">
           <button
             class="tab-btn ${effectiveView === 'contacts' ? 'active' : ''}"

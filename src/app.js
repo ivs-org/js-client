@@ -24,6 +24,7 @@ import { getResolution } from './media/video/resolution.js';
 import { Ringer } from './ui/ringer/ringer.js';
 import { RingType } from './ui/ringer/ring_type.js';
 import { showMessageNotification } from './ui/notify/browser_notify.js';
+import { ScreenWakeLock } from './ui/screen_wake_lock.js';
 
 
 const MOBILE_BREAKPOINT = 900;
@@ -224,7 +225,7 @@ function initResponsiveLayout() {
  * Основные кнопки UI
  * ------------------------------------------------------------------ */
 
-function handleJoinConferenceClick() {
+function connectToConference() {
     const { activeContactType, activeContactId, activeConferenceTag } = appState;
     if (activeContactType !== 'conference' || !activeContactId) {
         // ничего не выбрано
@@ -232,6 +233,7 @@ function handleJoinConferenceClick() {
     }
 
     AudioShared.kickFromGesture();
+    ScreenWakeLock.enable();
 
     const conf = Storage.getConference(activeContactId);
     if (!conf) return;
@@ -254,10 +256,7 @@ function initButtonsPanelActions() {
             case 'btnToggleCall':
                 if (!ctrl || !appState.online) return;
                 if (!ctrl.getCurrentConference()) {
-                    // Подключиться
-                    //let conf = appState.activeContactId ? appState.activeContactId : window.confTag;
-                    //ctrl.sendConnectToConference(conf);
-                    handleJoinConferenceClick();
+                    connectToConference();
                 } else {
                     // Отключиться
                     disconnectFromConference();
@@ -380,10 +379,6 @@ function initAuthEvents() {
 function checkWebCodecs() {
     if (!('VideoDecoder' in window) || !('AudioDecoder' in window)) {
         showError('WebCodecs недоступны. Пожалуйста, используйте HTTPS или localhost.');
-        return false;
-    }
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-        showError('WebCodecs доступны только в безопасном контексте (HTTPS или localhost).');
         return false;
     }
     const sabAvailable = typeof SharedArrayBuffer !== 'undefined' && crossOriginIsolated;
@@ -583,18 +578,23 @@ function handleDeviceConnected(device) {
             author_ssrc: device.author_ssrc,
             cryptoKey: device.secure_key
         });
-        if (ms.channelType === 'audio') {
-            ms._initAudio();
-        }
+
         mediaSessions.set(key, ms);
-        ms.start((el) => {
-            const container = document.getElementById('streams');
-            if (!container) {
-                console.warn('[Call] streams container not found');
-                return;
-            }
-            container.appendChild(el);
-        });
+
+        if (ms.channelType === 'audio') {
+            ms.initAudio()
+                .then(() => ms.start())
+                .catch(e => console.error('[Call] initAudio failed', e));
+        } else {
+            ms.start((el) => {
+                const container = document.getElementById('streams');
+                if (!container) {
+                    console.warn('[Call] streams container not found');
+                    return;
+                }
+                container.appendChild(el);
+            });
+        }
     }
 }
 
@@ -877,6 +877,8 @@ async function stopScreenShare() {
     }
 }
 function disconnectFromConference() {
+    ScreenWakeLock.disable();
+
     stopCam();
     stopMic();
 

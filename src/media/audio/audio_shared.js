@@ -74,7 +74,9 @@ export const AudioShared = {
     ensureWorklet() {
         if (this.workletReady) return this.workletReady;
         const ctx = this.ensureContext();
-        this.workletReady = ctx.audioWorklet.addModule('./src/media/audio/audio_processor.js')
+
+        const url = new URL('./audio_processor.js', import.meta.url);
+        this.workletReady = ctx.audioWorklet.addModule(url)
             .then(() => console.log('✅ audio worklet preloaded'))
             .catch(err => {
                 console.error('❌ audio worklet load failed:', err);
