@@ -13,13 +13,6 @@ appState = {
 
     layoutMode: 'desktop',     // 'desktop' | 'mobile'
 
-    auth: {
-        server: '',
-        login: '',
-        password: '',
-        autoLogin: true,
-    },
-
     modal: {
         open: false,
         variant: 'info',       // 'error' | 'success' | 'info' | 'confirm'

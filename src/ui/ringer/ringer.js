@@ -24,7 +24,8 @@ export class Ringer {
      * @param {object} [opts.presets] - переопределение DEFAULT_PRESETS
      */
     constructor(opts = {}) {
-        this._baseUrl = opts.baseUrl ?? '/sounds';
+        const appUrl = new URL('.', window.location.href).href;
+        this._baseUrl = appUrl + opts.baseUrl ?? '/sounds';
         this._volume = typeof opts.volume === 'number' ? opts.volume : 1.0;
         this._presets = { ...DEFAULT_PRESETS, ...(opts.presets || {}) };
 

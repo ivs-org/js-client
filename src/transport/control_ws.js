@@ -11,15 +11,6 @@ import { MemberList } from '../data/member_list.js';
 import { MessagesStorage } from '../data/messages_storage.js';
 import { setState, appState } from '../core/app_state.js';
 
-function saveCredsToStorage(server, login, pass, autoLogin) {
-    try {
-        const obj = { server, login, pass, autoLogin: !!autoLogin };
-        localStorage.setItem('vg_client', JSON.stringify(obj));
-    } catch (e) {
-        console.warn('saveCredsToStorage failed', e);
-    }
-}
-
 function bumpUnreadCounts(newMsgs) {
     if (!Array.isArray(newMsgs) || !newMsgs.length) return;
 
@@ -246,7 +237,6 @@ export class ControlWS {
                     case 1:
                         this.authToken = msg.connect_response.access_token || null;
                         this.client_id = msg.connect_response.id;
-                        saveCredsToStorage(this.server, this.login, this.password, true);
                         this._emit('auth', this.authToken);
                         let currentConf = localStorage.getItem('vg_current_conf');
                         if (currentConf) this.sendConnectToConference(currentConf);
@@ -257,7 +247,11 @@ export class ControlWS {
                     case 5: showError('Закончились слоты подключения к серверу'); break;
                     case 6: showError('Внутренняя ошибка сервера'); break;
                     case 7: showError('IP забанен по причине частых неверных попыток входа'); break;
-                    default: showError('Unknown connect_response: ' + r);
+                    default: showError('Unknown connect_response: ' + r); break;
+                }
+                if (r !== 1) {
+                    setState({view: 'login'});
+                    this.disconnect();
                 }
                 return;
             }

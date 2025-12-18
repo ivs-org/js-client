@@ -7,13 +7,13 @@
 
 "use strict";
 
-import { Storage } from './data/storage.js';
+import { Storage, loadStoredCreds, saveCredsToStorage } from './data/storage.js';
 import { MemberList } from './data/member_list.js';
 import { MessagesStorage, setSelfId as messagesSetSelfId } from './data/messages_storage.js';
 import { initLayout } from './ui/layout.js';
 import { setState, appState } from './core/app_state.js';
 import { registerUserViaHttp, interpretRegistrationResult } from './transport/registration_http.js';
-import { showModal, showError } from './ui/modal.js';
+import { showOk, showError } from './ui/modal.js';
 import { ControlWS } from './transport/control_ws.js';
 import { MediaChannel } from './media/media_channel.js';
 import { AudioShared } from './media/audio/audio_shared.js';
@@ -24,6 +24,7 @@ import { getResolution } from './media/video/resolution.js';
 import { Ringer } from './ui/ringer/ringer.js';
 import { RingType } from './ui/ringer/ring_type.js';
 import { showMessageNotification } from './ui/notify/browser_notify.js';
+import { parsePayload } from './ui/panels/chat_panel.js';
 import { ScreenWakeLock } from './ui/screen_wake_lock.js';
 
 
@@ -52,19 +53,9 @@ const mediaSessions = new Map();
 
 export const ringer = new Ringer({ baseUrl: '/assets/sounds', volume: 0.9 });
 
-/* ------------------------------------------------------------------
- * STORAGE: localStorage вместо cookie
- * ------------------------------------------------------------------ */
-
-function loadStoredCreds() {
-    try {
-        const raw = localStorage.getItem('vg_client');
-        if (!raw) return null;
-        return JSON.parse(raw);
-    } catch {
-        return null;
-    }
-}
+// ─────────────────────────────────────
+// Хранилище
+// ─────────────────────────────────────
 
 async function initDataLayer() {
     await Storage.init();
@@ -109,14 +100,16 @@ async function initDataLayer() {
     });
 }
 
-/* ------------------------------------------------------------------
- * Точка входа
- * ------------------------------------------------------------------ */
-document.addEventListener('DOMContentLoaded', async () => {
+// ─────────────────────────────────────
+// Аудио
+// ─────────────────────────────────────
+
+function initAudio() {
     AudioShared.ensureContext();
     AudioShared.ensureWorklet();
+    AudioShared.setOutputDevice?.(Storage.getSetting('media.speakerDeviceId', ''));
 
-    if (!checkWebCodecs()) return;
+    checkWebCodecs();
 
     console.log('🎧 Initializing audio playback...');
 
@@ -131,27 +124,55 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('AudioContext resumed');
         }
     }, { once: true });
+}
 
+// ─────────────────────────────────────
+// Точка входа
+// ─────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
     await initDataLayer();
 
-    AudioShared.setOutputDevice?.(Storage.getSetting('media.speakerDeviceId', ''));
-
+    initAudio();
     initResponsiveLayout();
     initLayout();
     initButtonsPanelActions();
     initAuthEvents();
 
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
-            .then(() => console.log('Service Worker зарегистрирован'))
-            .catch(err => console.error('Ошибка регистрации Service Worker:', err));
-    }
+    await initSW();
 });
 
-/* ------------------------------------------------------------------
- * Push подписка
- * ------------------------------------------------------------------ */
+// ─────────────────────────────────────
+// Web push
+// ─────────────────────────────────────
 
+async function initSW() {
+    if ('serviceWorker' in navigator) {
+        await navigator.serviceWorker.register('./sw.js', { scope: './' })
+            .then(() => console.log('Service Worker зарегистрирован'))
+            .catch(err => console.error('Ошибка регистрации Service Worker:', err));
+
+        await navigator.serviceWorker.addEventListener('message', (ev) => {
+            const msg = ev.data;
+            if (msg?.type !== 'notification_click') return;
+
+            const d = msg.data;
+
+            if (d.contact_type == 'member') {
+                Storage.updateMember(d.contact_id, { unreaded_count: 0 }).catch(() => { });
+            }
+            else if (d.contact_type == 'conference') {
+                Storage.updateConference(Storage.getConferenceIdByTag(d.conference_tag),
+                    { unreaded_count: 0 }).catch(() => { });
+            }
+                       
+            setState({
+                activeContactType: d.contact_type,
+                activeContactId: d.contact_id,
+                activeConferenceTag: d.conference_tag
+            });
+        });
+    }
+}
 function sendSubscriptionToBackend(sub) {
     // TODO: сюда нужен реальный запрос на бэк
     console.log('sendSubscriptionToBackend stub:', sub);
@@ -183,9 +204,9 @@ function subscribeUserToPush() {
     });
 }
 
-/* ------------------------------------------------------------------
- * Mobile helpers
- * ------------------------------------------------------------------ */
+// ─────────────────────────────────────
+// Mobile helpers
+// ─────────────────────────────────────
 
 function detectLayoutMode() {
     if (typeof window === 'undefined') return 'desktop';
@@ -226,6 +247,8 @@ function initResponsiveLayout() {
  * ------------------------------------------------------------------ */
 
 function connectToConference() {
+    checkWebCodecs();
+
     const { activeContactType, activeContactId, activeConferenceTag } = appState;
     if (activeContactType !== 'conference' || !activeContactId) {
         // ничего не выбрано
@@ -297,6 +320,11 @@ function initButtonsPanelActions() {
                 if (ctrl) ctrl.disconnect();
                 for (const m of mediaSessions.values()) m.close();
                 mediaSessions.clear();
+
+                const stored = loadStoredCreds();
+                if (stored) {
+                    saveCredsToStorage(stored.server, stored.login, stored.password, false);
+                }
                 
                 setState({ topMenuOpen: false, view: 'login' });
         }
@@ -312,13 +340,7 @@ function initAuthEvents() {
     document.addEventListener('app:login', (e) => {
         const { server, login, password } = e.detail || {};
 
-        setState({
-            auth: {
-                server: server || '',
-                login: login || '',
-                password: '',
-            }
-        });
+        saveCredsToStorage(server, login, password, true);
 
         startLoginFromUI(server, login, password);
     });
@@ -351,20 +373,21 @@ function initAuthEvents() {
                 return;
             }
 
-            showModal(
-                'Регистрация',
-                'Регистрация успешна. Теперь вы можете войти под указанным логином.'
+            showOk(
+                'Подтверждение',
+                'Регистрация выполнена успешно!'
             );
 
-            // возвращаемся на экран логина и префилим сервер/логин
-            setState({
-                view: 'login',
-                auth: {
-                    server: server || '',
-                    login: login || '',
-                    password: '',
-                }
-            });
+            // Логинимся
+            const payload = {
+                server: server || '',
+                login: login || '',
+                password: password || ''
+            };
+
+            document.dispatchEvent(new CustomEvent('app:login', {
+                detail: payload
+            }));
         } catch (err) {
             console.error('registration error', err);
             showError('Ошибка регистрации: ' + (err.message || 'неизвестная ошибка'));
@@ -378,13 +401,13 @@ function initAuthEvents() {
 
 function checkWebCodecs() {
     if (!('VideoDecoder' in window) || !('AudioDecoder' in window)) {
-        showError('WebCodecs недоступны. Пожалуйста, используйте HTTPS или localhost.');
+        showError('WebCodecs недоступны. Используйте HTTPS или localhost.');
         return false;
     }
     const sabAvailable = typeof SharedArrayBuffer !== 'undefined' && crossOriginIsolated;
 
     if (!sabAvailable) {
-        showError('SharedArrayBuffer не доступен, сервер не настроен на CORS');
+        showError('SharedArrayBuffer не доступен так как сервер не настроен на CORS. Воспроизведение звука невозможно.');
         return false;
     }
     return true;
@@ -646,37 +669,36 @@ function handleDeviceParams(dp) {
     ctrl.sendCreatedDevice(device_connect);
 }
 
-function formatMsgBody(m) {
-    if (!m) return '';
-    // если есть текст — покажем кусочек
-    if (m.text) return String(m.text).slice(0, 120);
-    return 'Откройте чат, чтобы посмотреть';
-}
 function handleNewMessage(newMsgs) {
-    ringer.Ring(RingType.NewMessage);
+    if (document.hidden === true) ringer.Ring(RingType.NewMessage);
 
     const m = newMsgs[newMsgs.length - 1];
 
     // минимально безопасный текст (чтобы не светить содержимое на лок-скрине)
-    const title = 'Новое сообщение';
-    const body = formatMsgBody(m);
+    const title = m.author_name + ' пишет:';
+
+    const msg = parsePayload(m.text);
+
+    const body = String(msg.message).slice(0, 120);
+
+    const data = {
+        contact_type: m.conference_tag ? 'conference' : 'member',
+        contact_id: m.author_id,
+        conference_tag: m.conference_tag
+    };
 
     showMessageNotification({
         title,
         body,
-        tag: m.chatKey ? `chat:${m.chatKey}` : undefined,
-        onClick: () => {
-            window.focus?.();
-            // ToDo: тут нужно открыть чат по m.chatKey
-            // openChatByChatKey(m.chatKey);
-        },
+        data
     });
 }
 
 function handleControlError(err) {
     if (appState.view === 'login') {
-        showError(`Сервер ${appState.auth.server} недоступен`);
+        showError(`Сервер ${ctrl.server} недоступен`);
     }
+    ctrl.disconnect();
     log('WSS error: ' + err);
 }
 

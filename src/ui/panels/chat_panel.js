@@ -228,7 +228,7 @@ function renderReplyBlock(payload) {
     `;
 }
 
-function parsePayload(text) {
+export function parsePayload(text) {
     if (!text) return { type: 'raw', message: '' };
     try {
         const obj = JSON.parse(text);

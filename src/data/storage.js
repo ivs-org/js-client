@@ -407,3 +407,24 @@ export const Storage = {
         notify();
     },
 };
+
+/// Credentials helpers
+
+export function loadStoredCreds() {
+    try {
+        const raw = localStorage.getItem('vg_client');
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
+}
+
+export function saveCredsToStorage(server, login, pass, autoLogin) {
+    try {
+        const obj = { server, login, pass, autoLogin: !!autoLogin };
+        localStorage.setItem('vg_client', JSON.stringify(obj));
+    } catch (e) {
+        console.warn('saveCredsToStorage failed', e);
+    }
+}

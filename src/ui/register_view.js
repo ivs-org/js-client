@@ -1,12 +1,13 @@
 // src/ui/register_view.js
-import { appState, setState } from '../core/app_state.js';
+import { setState } from '../core/app_state.js';
+import { loadStoredCreds } from '../data/storage.js';
 
 export function renderRegisterView(root, state) {
     if (!root) return;
 
-    const auth = appState.auth || {};
-    const server = auth.server || '';
-    const login = auth.login || '';
+    const stored = loadStoredCreds();
+    const server = stored?.server || '';
+    const login = stored?.login || '';
 
     root.innerHTML = `
       <div class="auth-wrapper">
@@ -108,15 +109,17 @@ export function renderRegisterView(root, state) {
         }));
     });
 
+    pass2El.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault(); // Предотвращаем лишние действия
+            submitEl.click(); // Программный клик по кнопке
+        }
+    });
+
     if (backLink) {
         backLink.addEventListener('click', () => {
             setState({
-                view: 'login',
-                auth: {
-                    server: serverEl.value.trim(),
-                    login: loginEl.value.trim(),
-                    password: '',
-                }
+                view: 'login'
             });
         });
     }

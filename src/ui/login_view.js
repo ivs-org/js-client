@@ -1,15 +1,6 @@
 // src/ui/login_view.js
-import { appState, setState } from '../core/app_state.js';
-
-function loadStoredCreds() {
-    try {
-        const raw = localStorage.getItem('vg_client');
-        if (!raw) return null;
-        return JSON.parse(raw);
-    } catch {
-        return null;
-    }
-}
+import { setState } from '../core/app_state.js';
+import { loadStoredCreds } from '../data/storage.js';
 
 export function renderLoginView(root, state) {
     if (!root) return;
@@ -79,15 +70,17 @@ export function renderLoginView(root, state) {
         regLink.addEventListener('click', () => {
             // переключаемся на экран регистрации
             setState({
-                view: 'register',
-                auth: {
-                    server: serverEl.value.trim(),
-                    login: loginEl.value.trim(),
-                    password: '',
-                }
+                view: 'register'
             });
         });
     }
+
+    passEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault(); // Предотвращаем лишние действия
+            submitEl.click(); // Программный клик по кнопке
+        }
+    });
 }
 
 function escapeHtml(str) {

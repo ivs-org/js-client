@@ -7,22 +7,13 @@ export function canNotifyNow() {
         Notification.permission === 'granted'
     );
 }
-
-export function showMessageNotification({ title, body, tag, onClick }) {
-    if (!canNotifyNow()) return null;
-
-    const n = new Notification(title, {
-        body: body || '',
-        tag: tag || undefined,  // tag помогает “заменять” уведомление для одного чата
-        silent: true,           // звук/рингер у тебя и так свой
-    });
-
-    if (typeof onClick === 'function') {
-        n.onclick = (ev) => {
-            try { ev?.preventDefault?.(); } catch { }
-            try { n.close(); } catch { }
-            onClick();
-        };
+export async function showMessageNotification({ title, body, data }) {
+    if (canNotifyNow() && 'serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification(title, {
+            body: body || '',
+            silent: true,           // звук/рингер у нас свой
+            data
+        });
     }
-    return n;
 }
