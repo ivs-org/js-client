@@ -12,13 +12,12 @@ export const AudioShared = {
 
     ensureContext() {
         if (!this.ctx || this.ctx.state === 'closed') {
-            this.ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
-            this._bindUnlock();
-            this._bindStateWatch();
-        } else {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });    
+
             this._bindUnlock();
             this._bindStateWatch();
         }
+
         return this.ctx;
     },
 
@@ -71,7 +70,7 @@ export const AudioShared = {
         });
     },
 
-    ensureWorklet() {
+    async ensureWorklet() {
         if (this.workletReady) return this.workletReady;
         const ctx = this.ensureContext();
 

@@ -82,7 +82,7 @@ export class MediaChannel {
         if (this.workletNode || this.ring) return;
 
         this.audioCtx = AudioShared.ensureContext();
-        await AudioShared.ensureWorklet(); // <-- гарантирует регистрацию 'audio-processor'
+        await AudioShared.ensureWorklet();
 
         const channels = 2;
         const capacity = 48000; // 1 сек/канал
@@ -100,7 +100,6 @@ export class MediaChannel {
         const dataViews = dataSABs.map(sab => new Float32Array(sab));
 
         // создать ворклет-ноду
-        this.audioCtx.audioWorklet.addModule('./src/media/audio/audio_processor.js');
         this.workletNode = new AudioWorkletNode(this.audioCtx, 'audio-processor', {
             numberOfInputs: 0,
             numberOfOutputs: 1,

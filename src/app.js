@@ -17,7 +17,7 @@ import { showOk, showError } from './ui/modal.js';
 import { ControlWS } from './transport/control_ws.js';
 import { MediaChannel } from './media/media_channel.js';
 import { AudioShared } from './media/audio/audio_shared.js';
-import { MicrophoneSession } from './media/audio/mic_session.js';
+import { MicSession } from './media/audio/mic_session.js';
 import { CameraSession } from './media/video/cam_session.js';
 import { ScreenSession } from './media/video/screen_session.js';
 import { getResolution } from './media/video/resolution.js';
@@ -104,18 +104,15 @@ async function initDataLayer() {
 // Аудио
 // ─────────────────────────────────────
 
-function initAudio() {
-    AudioShared.ensureContext();
-    AudioShared.ensureWorklet();
+async function initAudio() {
+    const audioCtx = AudioShared.ensureContext();
+    await AudioShared.ensureWorklet();
+    
     AudioShared.setOutputDevice?.(Storage.getSetting('media.speakerDeviceId', ''));
 
     checkWebCodecs();
 
     console.log('🎧 Initializing audio playback...');
-
-    // общий AudioContext (один на всё приложение)
-    const audioCtx = AudioShared.ensureContext();
-    AudioShared.ensureWorklet(); // фоновая предзагрузка, если еще не была
 
     // Для AEC AudioContext должен быть активирован пользователем
     document.body.addEventListener('click', async () => {
@@ -132,7 +129,7 @@ function initAudio() {
 document.addEventListener('DOMContentLoaded', async () => {
     await initDataLayer();
 
-    initAudio();
+    await initAudio();
     initResponsiveLayout();
     initLayout();
     initButtonsPanelActions();
@@ -564,19 +561,23 @@ function handleDeviceConnected(device) {
         }
 
         if (device.device_type == 4) { // Microphone
-            mic = new MicrophoneSession({
+            if (!mic) {
+                console.warn('[Microphone] CreatedDevice received but local capture is not started; dropping device');
+                ctrl.sendDisconnectDevice(device.device_id);
+                return;
+            }
+
+            mic.attachRemote({
                 server: ctrl.server,
                 token: ctrl.authToken,
                 deviceId: device.device_id,
                 ssrc: device.author_ssrc,
                 port: device.port,
                 keyHex: device.secure_key,
-                channels: 1
-            });
+            }).catch((e) => console.error('[Microphone] attachRemote failed', e));
 
-            mic.start();
-            setState({ micEnabled: true });
-            log(`Microphone started id=${device.device_id} ssrc=${device.author_ssrc}`);
+            log(`Microphone attached id=${device.device_id} ssrc=${device.author_ssrc}`);
+            return;
         }
     } else if (device.connect_type === 2) {
         const key = `dev_${device.device_id}_${device.client_id}`;
@@ -786,14 +787,56 @@ function resumeAllVideo() {
     }
 }
 
-function startMic() {
-    ctrl.sendDeviceParamsMic({ name: 'Browser Mic' });
+async function startMic() {
+    if (!ctrl) return;
+
+    try {
+        if (!mic) {
+            mic = new MicSession();
+            mic.on('speak_started', () => ctrl._send({ microphone_active: { active_type: 2, device_id: mic.deviceId, client_id: ctrl.client_id } }));
+            mic.on('speak_ended', () => ctrl._send({ microphone_active: { active_type: 1, device_id: mic.deviceId, client_id: ctrl.client_id } }));
+        }
+
+        await mic.startLocalCapture();
+        setState({ micEnabled: true });
+
+        ctrl.sendDeviceParamsMic({ name: 'Browser Mic' });
+    } catch (e) {
+        console.error('startMic error:', e);
+
+        let msg = 'Не удалось получить доступ к микрофону.';
+
+        if (e.name === 'NotReadableError') {
+            msg = 'Микрофон уже используется другим приложением или устройством. Закройте другое приложение с микрофоном и попробуйте ещё раз.';
+        } else if (e.name === 'NotAllowedError' || e.name === 'SecurityError') {
+            msg = 'Доступ к микрофону запрещён. Разрешите доступ к микрофону в настройках браузера и перезагрузите страницу.';
+        } else if (e.name === 'OverconstrainedError') {
+            msg = 'Текущие настройки микрофона недоступны. Попробуйте другое разрешение или устройство.';
+        }
+
+        try { await mic?.stop?.(); } catch { }
+        mic = null;
+        setState({ micEnabled: false });
+
+        showError(msg);
+        log(msg);
+    }
 }
 
 function stopMic() {
     if (!ctrl) return;
     if (mic) {
-        ctrl.sendDisconnectDevice(mic.deviceId);
+        // deviceId появляется после CreatedDevice от сервера
+        if (mic.deviceId) {
+            ctrl.sendDisconnectDevice(mic.deviceId);
+        } else {
+            //mic._wantDisconnectOnAttach = true;
+        }
+
+        mic.stop().catch(() => { });
+        if (mic._speaking) { ctrl._send({ microphone_active: { active_type: 1, device_id: mic.deviceId, client_id: ctrl.client_id } }); }
+        mic = null;
+        setState({ micEnabled: false });
     }
 }
 
