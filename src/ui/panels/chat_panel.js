@@ -71,7 +71,7 @@ export function renderChatPanel(root, state) {
             </div>
             <div class="chat-input-row">
                 <textarea class="chat-input" rows="1"></textarea>
-                <button class="chat-send-btn">⮞</button>
+                <button class="chat-send-btn">➤</button>
             </div>
         </div>
         `;
