@@ -699,8 +699,8 @@ function handleControlError(err) {
     if (appState.view === 'login') {
         showError(`Сервер ${ctrl.server} недоступен`);
     }
-    ctrl.disconnect();
-    log('WSS error: ' + err);
+    //ctrl.disconnect();
+    log('WSS error: ' + (err?.message || err?.type || String(err)));
 }
 
 function handleControlClose() {
@@ -942,6 +942,8 @@ async function stopScreenShare() {
     }
 }
 function disconnectFromConference() {
+    if (!appState.activeCall) return;
+
     ScreenWakeLock.disable();
 
     stopCam();

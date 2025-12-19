@@ -97,7 +97,13 @@ export class ControlWS {
         this._watchdogPeriodMs = 5_000;
 
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) this._checkStale('resume');
+            if (document.hidden) return;
+
+            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                this._forceReconnect('resume');
+            } else {
+                this._checkStale('resume');
+            }
         });
 
         window.addEventListener('online', () => {
@@ -153,15 +159,21 @@ export class ControlWS {
     }
 
     _connect() {
-        if (!navigator.onLine) return;
-
+        console.log(`🕹️ Сontrol ws try connect to: ${this.server}`);
+        
         // защита от двойного коннекта
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+            console.log(`🕹️ Сontrol ws already connected, do nothing`);
             return;
         }
         this._closing = false;
 
-        this.ws = new WebSocket(this.server);
+        try {
+            this.ws = new WebSocket(this.server);
+        } catch (e) {
+            this._scheduleReconnect();
+            return;
+        }
         this.ws.binaryType = 'arraybuffer';
 
         this.ws.onopen = () => {
@@ -172,7 +184,7 @@ export class ControlWS {
             
             this._send({ connect_request: { login: this.login, password: this.password, client_version: 1000 } });
 
-            console.log('control ws open, sending connect_request');
+            console.log('🕹️ Сontrol ws open, sending connect_request');
         };
 
         this.ws.onmessage = async (ev) => {
@@ -223,7 +235,13 @@ export class ControlWS {
                 if (r !== 1) {
                     setState({view: 'login'});
                     this.disconnect();
+                    return;
                 }
+
+                this.loadGroups();
+                this.loadContacts();
+                this.loadConferences();
+
                 return;
             }
 
@@ -308,13 +326,15 @@ export class ControlWS {
         };
 
         this.ws.onclose = (e) => {
-            console.log('control ws closed', e.code, e.reason);
+            console.log(`🕹️ Сontrol ws closed ${e.code}, ${e.reason}`);
             this._stopWatchdog();
+            this.ws = null;
             this.bus.emit('close');
             if (!this._closing) this._scheduleReconnect();
         };
 
         this.ws.onerror = (e) => {
+            console.log(`🕹️ Сontrol ws error ${e.code}, ${e.reason}`);
             this.bus.emit('error', e);
             try { this.ws && this.ws.close(); } catch { }
         };
@@ -384,7 +404,19 @@ export class ControlWS {
         this.currentConference = null;
     }
 
-    _send(obj) { try { this.ws && this.ws.send(JSON.stringify(obj)); } catch (e) { console.warn('send failed', e); } }
+    _send(obj) { try { this.ws && this.ws.send(JSON.stringify(obj)); } catch (e) { console.warn('🕹️ Сontrol ws send failed', e); } }
+
+    loadGroups() {
+        this._send({ group_list: { groups: [] } });
+    }
+
+    loadContacts() {
+        this._send({ search_contact: { query: '==UPDATE==' } });
+    }
+
+    loadConferences() {
+        this._send({ conferences_list: { conferences: [] } });
+    }
 
     loadMessages() {
         const from = MessagesStorage.getLastMessageDt() || 0;
@@ -440,7 +472,7 @@ export class ControlWS {
         const age = Date.now() - last;
         if (age <= this._staleTimeoutMs) return;
 
-        console.warn(`[control_ws] stale ws (${reason}), lastRx ${age}ms ago -> reconnect`);
+        console.warn(`🕹️ Сontrol ws stale ws (${reason}), lastRx ${age}ms ago -> reconnect`);
 
         // форс-реконнект: close может не прилететь, поэтому планируем reconnect сразу
         try { this.ws.close(4001, 'stale'); } catch { }
