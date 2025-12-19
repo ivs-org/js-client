@@ -8,10 +8,10 @@
 "use strict";
 
 import { Storage, loadStoredCreds, saveCredsToStorage } from './data/storage.js';
+import { setState, appState } from './core/app_state.js';
 import { MemberList } from './data/member_list.js';
 import { MessagesStorage, setSelfId as messagesSetSelfId } from './data/messages_storage.js';
 import { initLayout } from './ui/layout.js';
-import { setState, appState } from './core/app_state.js';
 import { registerUserViaHttp, interpretRegistrationResult } from './transport/registration_http.js';
 import { showOk, showError } from './ui/modal.js';
 import { ControlWS } from './transport/control_ws.js';
@@ -424,16 +424,16 @@ function wireControlEvents() {
     ctrlEventUnsubscribers = [];
 
     ctrlEventUnsubscribers.push(
-        ctrl.on('auth', handleControlAuth),
-        ctrl.on('connectToConferenceResponse', handleConnectToConferenceResponse),
-        ctrl.on('disconnectFromConference', handleDisconnectFromConference),
-        ctrl.on('ping', () => { }),
-        ctrl.on('deviceConnected', handleDeviceConnected),
-        ctrl.on('deviceDisconnect', handleDeviceDisconnect),
-        ctrl.on('deviceParams', handleDeviceParams),
-        ctrl.on('new_message', handleNewMessage),
-        ctrl.on('error', handleControlError),
-        ctrl.on('close', handleControlClose),
+        ctrl.bus.on('auth', handleControlAuth),
+        ctrl.bus.on('connectToConferenceResponse', handleConnectToConferenceResponse),
+        ctrl.bus.on('disconnectFromConference', handleDisconnectFromConference),
+        ctrl.bus.on('ping', () => { }),
+        ctrl.bus.on('deviceConnected', handleDeviceConnected),
+        ctrl.bus.on('deviceDisconnect', handleDeviceDisconnect),
+        ctrl.bus.on('deviceParams', handleDeviceParams),
+        ctrl.bus.on('new_message', handleNewMessage),
+        ctrl.bus.on('error', handleControlError),
+        ctrl.bus.on('close', handleControlClose),
     );
 }
 
@@ -793,8 +793,8 @@ async function startMic() {
     try {
         if (!mic) {
             mic = new MicSession();
-            mic.on('speak_started', () => ctrl._send({ microphone_active: { active_type: 2, device_id: mic.deviceId, client_id: ctrl.client_id } }));
-            mic.on('speak_ended', () => ctrl._send({ microphone_active: { active_type: 1, device_id: mic.deviceId, client_id: ctrl.client_id } }));
+            mic.bus.on('speak_started', () => ctrl._send({ microphone_active: { active_type: 2, device_id: mic.deviceId, client_id: ctrl.client_id } }));
+            mic.bus.on('speak_ended', () => ctrl._send({ microphone_active: { active_type: 1, device_id: mic.deviceId, client_id: ctrl.client_id } }));
         }
 
         await mic.startLocalCapture();

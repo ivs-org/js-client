@@ -15,7 +15,7 @@ import {
     gcmEncrypt,
     makeIvGcm,
 } from '../../transport/rtp_wsm_utils.js';
-
+import { EventBus } from '../../core/event_bus.js';
 import { Storage } from '../../data/storage.js';
 import { AudioShared } from '../audio/audio_shared.js';
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -77,8 +77,8 @@ export class MicSession {
         this._closing = false;
         this._localRunning = false;
 
-        // events
-        this._handlers = {};
+        // event bus
+        this.bus = new EventBus();
 
         // VAD via WebAudio
         this._vad = { ...vad };
@@ -92,26 +92,6 @@ export class MicSession {
         this._speaking = false;
         this._aboveSince = 0;
         this._belowSince = 0;
-    }
-
-    // --- events ---
-    on(name, fn) {
-        if (!this._handlers[name]) this._handlers[name] = new Set();
-        this._handlers[name].add(fn);
-        return () => this.off(name, fn);
-    }
-    off(name, fn) {
-        const s = this._handlers[name];
-        if (!s) return;
-        s.delete(fn);
-        if (!s.size) delete this._handlers[name];
-    }
-    _emit(name, payload) {
-        const s = this._handlers[name];
-        if (!s) return;
-        for (const fn of s) {
-            try { fn(payload); } catch (e) { console.warn('[MicSession] handler error', name, e); }
-        }
     }
 
     getCaptureInfo() {
@@ -438,7 +418,7 @@ export class MicSession {
                 if (now - this._aboveSince >= startHold) {
                     this._speaking = true;
                     this._belowSince = 0;
-                    this._emit('speak_started', { level: this._level });
+                    this.bus.emit('speak_started', { level: this._level });
                 }
             } else {
                 this._aboveSince = 0;
@@ -452,7 +432,7 @@ export class MicSession {
             if (now - this._belowSince >= endHold) {
                 this._speaking = false;
                 this._aboveSince = 0;
-                this._emit('speak_ended', { level: this._level });
+                this.bus.emit('speak_ended', { level: this._level });
             }
         } else {
             this._belowSince = 0;

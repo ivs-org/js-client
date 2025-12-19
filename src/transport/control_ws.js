@@ -5,7 +5,8 @@
  * Copyright (C), Infinity Video Soft LLC, 2025
  */
 
-import { showModal, showError } from '../ui/modal.js';
+import { showError } from '../ui/modal.js';
+import { EventBus } from '../core/event_bus.js';
 import { Storage } from '../data/storage.js';
 import { MemberList } from '../data/member_list.js';
 import { MessagesStorage } from '../data/messages_storage.js';
@@ -67,9 +68,6 @@ export class ControlWS {
         password,
         autoReconnect = true,
     }) {
-        // Реестр обработчиков событий
-        this._handlers = {};
-
         this.client_id = 0;
 
         this.server = server;
@@ -79,6 +77,9 @@ export class ControlWS {
 
         this.authToken = null;
         this.ws = null;
+
+        // event bus
+        this.bus = new EventBus();
 
         // stores
         this.currentConference = null;
@@ -109,37 +110,7 @@ export class ControlWS {
             try { this.ws && this.ws.close(4000, 'offline'); } catch { }
         });
 
-
         this._connect();
-    }
-
-    on(eventName, handler) {
-        if (!this._handlers[eventName]) {
-            this._handlers[eventName] = new Set();
-        }
-        this._handlers[eventName].add(handler);
-        return () => this.off(eventName, handler);
-    }
-
-    off(eventName, handler) {
-        const set = this._handlers[eventName];
-        if (!set) return;
-        set.delete(handler);
-        if (!set.size) {
-            delete this._handlers[eventName];
-        }
-    }
-
-    _emit(eventName, payload) {
-        const set = this._handlers[eventName];
-        if (!set) return;
-        for (const fn of set) {
-            try {
-                fn(payload);
-            } catch (e) {
-                console.error('ControlWS handler error for', eventName, e);
-            }
-        }
     }
 
     getClientId() {
@@ -222,12 +193,12 @@ export class ControlWS {
             if (isPing) {
                 this._bumpPing();
                 this._send({ ping: {} });
-                this._emit('ping');
+                this.bus.emit('ping');
                 return;
             }
 
             if (txt.includes('disconnect_from_conference')) {
-                this._emit('disconnectFromConference');
+                this.bus.emit('disconnectFromConference');
                 return;
             }
 
@@ -237,7 +208,7 @@ export class ControlWS {
                     case 1:
                         this.authToken = msg.connect_response.access_token || null;
                         this.client_id = msg.connect_response.id;
-                        this._emit('auth', this.authToken);
+                        this.bus.emit('auth', this.authToken);
                         let currentConf = localStorage.getItem('vg_current_conf');
                         if (currentConf) this.sendConnectToConference(currentConf);
                         break;
@@ -258,23 +229,23 @@ export class ControlWS {
 
             if (msg.connect_to_conference_response) {
                 this.currentConference = msg.connect_to_conference_response;
-                this._emit('connectToConferenceResponse', msg.connect_to_conference_response);
+                this.bus.emit('connectToConferenceResponse', msg.connect_to_conference_response);
                 return;
             }
 
             if (msg.device_connect) {
                 this.onDeviceConnected && this.onDeviceConnected(msg.device_connect);
-                this._emit('deviceConnected', msg.device_connect);
+                this.bus.emit('deviceConnected', msg.device_connect);
                 return;
             }
 
             if (msg.device_disconnect) {
-                this._emit('deviceDisconnect', msg.device_disconnect);
+                this.bus.emit('deviceDisconnect', msg.device_disconnect);
                 return;
             }
 
             if (msg.device_params) {
-                this._emit('deviceParams', msg.device_params);
+                this.bus.emit('deviceParams', msg.device_params);
                 return;
             }
 
@@ -327,7 +298,7 @@ export class ControlWS {
                     const newMsgs = await MessagesStorage.applyDeliveryMessages(msg.delivery_messages);
                     bumpUnreadCounts(newMsgs);
                     if (newMsgs?.length) {
-                        this._emit('new_message', newMsgs);
+                        this.bus.emit('new_message', newMsgs);
                     }
                 } catch (e) {
                     console.warn('[MessagesStorage] applyDeliveryMessages failed', e);
@@ -339,12 +310,12 @@ export class ControlWS {
         this.ws.onclose = (e) => {
             console.log('control ws closed', e.code, e.reason);
             this._stopWatchdog();
-            this._emit('close');
+            this.bus.emit('close');
             if (!this._closing) this._scheduleReconnect();
         };
 
         this.ws.onerror = (e) => {
-            this._emit('error', e);
+            this.bus.emit('error', e);
             try { this.ws && this.ws.close(); } catch { }
         };
     }
