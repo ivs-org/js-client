@@ -19,7 +19,7 @@ export class MediaChannel {
     constructor({ url, port, token, channelType, deviceId, clientId, label, receiver_ssrc, author_ssrc, cryptoKey }) {
         this.started = false;
 
-        this.url = url; // base ws URL (ws://host:port)
+        this.url = url; // base ws URL (wss://host:port)
         this.port = port; // media port from device_connected
         this.token = token;
 

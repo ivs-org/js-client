@@ -126,6 +126,33 @@ main {
     border-left: 1px solid #222;
 }
 
+.icon-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    border: 1px solid #222;
+    background: #0b0b0b;
+    color: #e5e7eb;
+    cursor: pointer;
+}
+
+    .icon-btn:hover {
+        background: #111;
+    }
+
+    .icon-btn:disabled {
+        opacity: 0.45;
+        cursor: default;
+    }
+
+    .icon-btn.danger {
+        border-color: #3f1d1d;
+    }
+
+        .icon-btn.danger:hover {
+            background: #1a0f0f;
+        }
+
 /*****************************************
  * 3. HEADER + КАРТОЧКИ + ФОРМЫ
  *****************************************/
@@ -325,6 +352,25 @@ video {
     box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
 }
 
+.auth-icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(255,255,255,0.06);
+    color: #e5e7eb;
+}
+
+.auth-icon-btn:hover {
+    background: rgba(255,255,255,0.10);
+}
+
+.auth-hint {
+    margin-top: 8px;
+    font-size: 12px;
+    color: rgba(229,231,235,0.70);
+}
+
 .auth-row {
     display: flex;
     align-items: center;
@@ -350,6 +396,143 @@ video {
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+.auth-select-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.auth-select {
+    width: 100%;
+    height: 42px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid #222;
+    background: #0b0b0b;
+    color: #e5e7eb;
+    outline: none;
+}
+
+    .auth-select:focus {
+        border-color: #334155;
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+    }
+
+/* Shell layout */
+.auth-shell {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 2fr 1fr; /* hero 2/3 + panel 1/3 */
+    background: #060606;
+}
+
+/* Left hero */
+.auth-hero {
+    position: relative;
+    overflow: hidden;
+    background: radial-gradient(1200px 700px at 20% 20%, rgba(56, 189, 248, 0.20), transparent 55%), radial-gradient(900px 600px at 60% 70%, rgba(99, 102, 241, 0.14), transparent 60%), linear-gradient(120deg, #050505, #0b0b0b);
+}
+
+    .auth-hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        opacity: 0.18;
+        background-image: linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
+        background-size: 42px 42px;
+        transform: translateZ(0);
+        pointer-events: none;
+    }
+
+    .auth-hero::after {
+        content: "";
+        position: absolute;
+        right: -60px;
+        bottom: -60px;
+        width: 520px;
+        height: 520px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, rgba(56,189,248,0.35), transparent 60%);
+        filter: blur(2px);
+        pointer-events: none;
+    }
+
+.auth-hero-inner {
+    position: relative;
+    height: 95%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: clamp(16px, 3.5vw, 48px);
+    gap: 10px;
+    color: #e5e7eb;
+}
+
+.auth-hero-logo {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.10);
+    backdrop-filter: blur(6px);
+}
+
+.auth-hero-title {
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.auth-hero-sub {
+    max-width: 560px;
+    color: rgba(229,231,235,0.78);
+    font-size: 15px;
+    line-height: 1.4;
+}
+.auth-hero-bottom {
+    padding-bottom: clamp(8px, 2vh, 28px);
+}
+
+/* Right panel */
+.auth-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px;
+    background: #060606;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 420px;
+}
+
+/* Mobile: hero скрываем, форма на всю ширину */
+@media (max-width: 900px) {
+    .auth-shell {
+        grid-template-columns: 1fr;
+    }
+
+    .auth-hero {
+        display: none;
+    }
+
+    .auth-panel {
+        padding: 18px;
+    }
+}
+
+/* Очень маленькие экраны */
+@media (max-width: 420px) {
+    .auth-panel {
+        padding: 12px;
+    }
 }
 
 .btn-primary {

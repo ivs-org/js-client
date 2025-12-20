@@ -7,7 +7,25 @@
 
 import { buildContactsTree } from '../ui/contacts_tree.js';
 
-const DB_NAME = 'videograce_offline';
+let DB_NAME = 'videograce_offline';
+let _dbInstance = null;
+
+export function setDbName(name) {
+    const n = String(name || '').trim();
+    if (!n || n === DB_NAME) return;
+
+    DB_NAME = n;
+
+    // сброс кеша/инстанса
+    try { _dbInstance?.close?.(); } catch { }
+    _dbInstance = null;
+    dbPromise = null;
+}
+
+export function getDbName() {
+    return DB_NAME;
+}
+
 const DB_VERSION = 3;
 const STORE_GROUPS = 'groups';
 const STORE_MEMBERS = 'contacts';
@@ -96,7 +114,10 @@ export function openDb() {
             }
         };
 
-        req.onsuccess = () => resolve(req.result);
+        req.onsuccess = () => {
+            _dbInstance = req.result;
+            resolve(_dbInstance);
+        };
         req.onerror = () => reject(req.error);
     });
 
@@ -407,24 +428,3 @@ export const Storage = {
         notify();
     },
 };
-
-/// Credentials helpers
-
-export function loadStoredCreds() {
-    try {
-        const raw = localStorage.getItem('vg_client');
-        if (!raw) return null;
-        return JSON.parse(raw);
-    } catch {
-        return null;
-    }
-}
-
-export function saveCredsToStorage(server, login, pass, autoLogin) {
-    try {
-        const obj = { server, login, pass, autoLogin: !!autoLogin };
-        localStorage.setItem('vg_client', JSON.stringify(obj));
-    } catch (e) {
-        console.warn('saveCredsToStorage failed', e);
-    }
-}

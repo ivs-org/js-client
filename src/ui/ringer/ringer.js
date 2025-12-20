@@ -25,7 +25,7 @@ export class Ringer {
      */
     constructor(opts = {}) {
         const appUrl = new URL('.', window.location.href).href;
-        this._baseUrl = appUrl + opts.baseUrl ?? '/sounds';
+        this._baseUrl = appUrl + opts.baseUrl ?? 'sounds';
         this._volume = typeof opts.volume === 'number' ? opts.volume : 1.0;
         this._presets = { ...DEFAULT_PRESETS, ...(opts.presets || {}) };
 

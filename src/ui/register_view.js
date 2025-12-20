@@ -1,68 +1,79 @@
 // src/ui/register_view.js
-import { setState } from '../core/app_state.js';
-import { loadStoredCreds } from '../data/storage.js';
+import { appState, setState } from '../core/app_state.js';
 
 export function renderRegisterView(root, state) {
     if (!root) return;
 
-    const stored = loadStoredCreds();
+    const stored = (state && state.auth) ? state.auth : (appState.auth || {});
     const server = stored?.server || '';
     const login = stored?.login || '';
 
     root.innerHTML = `
-      <div class="auth-wrapper">
-        <div class="auth-card">
-          <h1 class="auth-title">Регистрация</h1>
-
-          <div class="auth-field">
-            <label for="regServer">Сервер</label>
-            <input id="regServer" type="text"
-                   placeholder="wss://server:port/register"
-                   value="${escapeHtml(server)}" />
-          </div>
-
-          <div class="auth-field">
-            <label for="regLogin">Логин</label>
-            <input id="regLogin" type="text"
-                   value="${escapeHtml(login)}" />
-          </div>
-
-          <div class="auth-field">
-            <label for="regName">Имя (отображаемое)</label>
-            <input id="regName" type="text" />
-          </div>
-
-          <div class="auth-field">
-            <label for="regPassword">Пароль</label>
-            <input id="regPassword" type="password" />
-          </div>
-
-          <div class="auth-field">
-            <label for="regPassword2">Подтверждение пароля</label>
-            <input id="regPassword2" type="password" />
-          </div>
-
-          <!-- Капча: зарезервировано под бэкенд, пока отключено -->
-          <div class="auth-field reg-captcha reg-captcha-disabled">
-            <label>Капча</label>
-            <div class="reg-captcha-placeholder">
-              Капча будет здесь (сейчас отключена)
+        <div class="auth-shell">
+            <div class="auth-hero" aria-hidden="true">
+                <div class="auth-hero-inner">
+            <div class="auth-hero-logo">VG</div>
+            <div class="auth-hero-bottom">
+              <div class="auth-hero-title">VideoGrace</div>
+              <div class="auth-hero-sub">
+                Вход в рабочий контур. Без лишних движений — кроме полезных.
+              </div>
             </div>
           </div>
+            </div>
 
-          <div class="auth-actions">
-            <button id="btnRegisterSubmit" type="button">Зарегистрироваться</button>
-          </div>
+            <div class="auth-panel">
+                <div class="auth-card">
+                    <h1 class="auth-title">Регистрация</h1>
+                    <div class="auth-field">
+                        <label for="regServer">Сервер</label>
+                        <input id="regServer" type="text"
+                            placeholder="wss://server:port/register"
+                            value="${escapeHtml(server)}" />
+                    </div>
 
-          <div class="auth-switch">
-            Уже есть аккаунт?
-            <button type="button" id="lnkBackToLogin" class="link-btn">
-              Войти
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
+                    <div class="auth-field">
+                        <label for="regLogin">Логин</label>
+                        <input id="regLogin" type="text"
+                            value="${escapeHtml(login)}" />
+                    </div>
+
+                    <div class="auth-field">
+                        <label for="regName">Имя (отображаемое)</label>
+                        <input id="regName" type="text" />
+                    </div>
+
+                    <div class="auth-field">
+                        <label for="regPassword">Пароль</label>
+                        <input id="regPassword" type="password" />
+                    </div>
+
+                    <div class="auth-field">
+                        <label for="regPassword2">Подтверждение пароля</label>
+                        <input id="regPassword2" type="password" />
+                    </div>
+
+                    <!-- Капча: зарезервировано под бэкенд, пока отключено -->
+                    <div class="auth-field reg-captcha reg-captcha-disabled">
+                        <label>Капча</label>
+                        <div class="reg-captcha-placeholder">
+                        Капча будет здесь (сейчас отключена)
+                    </div>
+                </div>
+
+                <div class="auth-actions">
+                    <button id="btnRegisterSubmit" type="button">Зарегистрироваться</button>
+                </div>
+
+                <div class="auth-switch">
+                    Уже есть аккаунт?
+                    <button type="button" id="lnkBackToLogin" class="link-btn">
+                    Войти
+                    </button>
+                </div>
+            </div>
+        </div>`;
+
 
     const serverEl = root.querySelector('#regServer');
     const loginEl = root.querySelector('#regLogin');

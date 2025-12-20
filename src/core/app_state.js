@@ -11,6 +11,13 @@ export const appState = {
 
     layoutMode: 'desktop',     // 'desktop' | 'mobile'
 
+    auth: {
+        server: '',
+        login: '',
+        password: '',
+        autoLogin: false,
+    },
+
     modal: {
         open: false,
         variant: 'info',       // 'error' | 'success' | 'info' | 'confirm'
@@ -55,6 +62,8 @@ export const appState = {
     camEnabled: false,
     demoEnabled: false,
     micEnabled: false,
+
+    launchParams: null,
 };
 
 const listeners = new Set();

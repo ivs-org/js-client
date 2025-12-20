@@ -11,6 +11,7 @@ import { Storage } from '../data/storage.js';
 import { MemberList } from '../data/member_list.js';
 import { MessagesStorage } from '../data/messages_storage.js';
 import { setState, appState } from '../core/app_state.js';
+import { SessionStore, ensureWsUrl } from '../data/session_store.js';
 
 function bumpUnreadCounts(newMsgs) {
     if (!Array.isArray(newMsgs) || !newMsgs.length) return;
@@ -70,7 +71,7 @@ export class ControlWS {
     }) {
         this.client_id = 0;
 
-        this.server = server;
+        this.server = ensureWsUrl(server);
         this.login = login;
         this.password = password;
         this.autoReconnect = !!autoReconnect;
@@ -221,8 +222,8 @@ export class ControlWS {
                         this.authToken = msg.connect_response.access_token || null;
                         this.client_id = msg.connect_response.id;
                         this.bus.emit('auth', this.authToken);
-                        let currentConf = localStorage.getItem('vg_current_conf');
-                        if (currentConf) this.sendConnectToConference(currentConf);
+                        const currentConf = Storage.getSetting('media.currentConference', '');
+                        if (currentConf !== '') this.sendConnectToConference(currentConf);
                         break;
                     case 2: showError('Неверный логин или пароль'); break;
                     case 3: showError('Версия клиента устарела'); break;
@@ -233,8 +234,12 @@ export class ControlWS {
                     default: showError('Unknown connect_response: ' + r); break;
                 }
                 if (r !== 1) {
-                    setState({view: 'login'});
+                    this.autoReconnect = false;
+                    
                     this.disconnect();
+
+                    setState({ view: 'login' });
+
                     return;
                 }
 

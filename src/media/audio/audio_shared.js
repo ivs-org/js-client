@@ -75,7 +75,7 @@ export const AudioShared = {
         const ctx = this.ensureContext();
 
         const url = new URL('.', window.location.href).href
-            + '/src/media/audio/audio_processor.js';
+            + 'src/media/audio/audio_processor.js';
         
         this.workletReady = ctx.audioWorklet.addModule(url)
             .then(() => console.log('✅ audio worklet preloaded'))

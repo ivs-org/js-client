@@ -7,7 +7,10 @@
 
 "use strict";
 
-import { Storage, loadStoredCreds, saveCredsToStorage } from './data/storage.js';
+import { parseLaunchParams } from './core/launch_params.js';
+import { SessionStore, makeDbName, normalizeServer } from './data/session_store.js';
+import { setDbName } from './data/storage.js';
+import { Storage } from './data/storage.js';
 import { setState, appState } from './core/app_state.js';
 import { MemberList } from './data/member_list.js';
 import { MessagesStorage, setSelfId as messagesSetSelfId } from './data/messages_storage.js';
@@ -34,9 +37,9 @@ let mic = null;
 let cam = null;
 let scr = null;
 
-let lastCamId = Storage.getSetting('media.cameraDeviceId', '');
-let lastMicId = Storage.getSetting('media.micDeviceId', '');
-let lastSpkId = Storage.getSetting('media.speakerDeviceId', '');
+let lastCamId = 0;
+let lastMicId = 0;
+let lastSpkId = 0;
 
 const urlParams = new URLSearchParams(location.search);
 window.confTag = urlParams.get('conf') || 'show';
@@ -118,7 +121,7 @@ async function initAudio() {
     document.body.addEventListener('click', async () => {
         if (audioCtx.state === 'suspended') {
             await audioCtx.resume();
-            console.log('AudioContext resumed');
+            console.log('🎧 AudioContext resumed');
         }
     }, { once: true });
 }
@@ -127,6 +130,31 @@ async function initAudio() {
 // Точка входа
 // ─────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+    const launch = parseLaunchParams();
+    const boot = SessionStore.bootstrap({ urlServer: launch.server });
+
+    // прокинем в appState — чтобы login_view показал правильные поля
+    setState({
+        auth: {
+            server: boot.session.server || '',
+            login: boot.session.login || '',
+            password: '', // пароль не светим в UI
+        },
+        launchParams: launch,       // удобно держать в state
+    });
+
+    // Выбираем DB имя:
+    // - если login уже известен (автологин) => server+login
+    // - если login пустой => сделаем временную DB на server (или дефолт)
+    const server = boot.session.server || normalizeServer(boot.session.server);
+    if (server && boot.session.login) {
+        setDbName(makeDbName(server, boot.session.login));
+    } else if (server) {
+        setDbName(`videograce_offline_${server}`); // временная на host (можно тоже захэшировать)
+    } else {
+        setDbName('videograce_offline'); // fallback
+    }
+
     await initDataLayer();
 
     await initAudio();
@@ -134,6 +162,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     initLayout();
     initButtonsPanelActions();
     initAuthEvents();
+
+    if (boot.canAutoLogin) {
+        startLogin(boot.session.server, boot.session.login, boot.session.pass);
+    } else if (boot.forceLogin) {
+        setState({ view: 'login' });
+    }
 
     await initSW();
 });
@@ -145,8 +179,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function initSW() {
     if ('serviceWorker' in navigator) {
         await navigator.serviceWorker.register('./sw.js', { scope: './' })
-            .then(() => console.log('Service Worker зарегистрирован'))
-            .catch(err => console.error('Ошибка регистрации Service Worker:', err));
+            .then(() => console.log('👷 Service Worker зарегистрирован'))
+            .catch(err => console.error('👷 Ошибка регистрации Service Worker:', err));
 
         await navigator.serviceWorker.addEventListener('message', (ev) => {
             const msg = ev.data;
@@ -179,9 +213,9 @@ function subscribeUserToPush() {
     navigator.serviceWorker.ready.then(registration => {
         registration.pushManager.getSubscription().then(subscription => {
             if (subscription) {
-                console.log('Пользователь уже подписан. Объект подписки:', subscription);
+                console.log('🛠️ Пользователь уже подписан. Объект подписки:', subscription);
             } else {
-                console.log('Пользователь еще не подписан. Запуск подписки...');
+                console.log('🛠️ Пользователь еще не подписан. Запуск подписки...');
 
                 const applicationServerKey = 'BNOLt7sJq9bx0bv2eXhcQMykHzA7_uSqpDCQREKxe-P0LRy4qQeN9eP11QZVLna916kcl116uQZzrMT2ABuTXbg';
 
@@ -190,11 +224,11 @@ function subscribeUserToPush() {
                     applicationServerKey: applicationServerKey
                 })
                     .then(newSubscription => {
-                        console.log('Пользователь успешно подписан:', newSubscription);
+                        console.log('🛠️ Пользователь успешно подписан:', newSubscription);
                         sendSubscriptionToBackend(newSubscription);
                     })
                     .catch(err => {
-                        console.error('Не удалось подписаться на уведомления:', err);
+                        console.error('🛠️ Не удалось подписаться на уведомления:', err);
                     });
             }
         });
@@ -221,7 +255,7 @@ function initResponsiveLayout() {
         if (newMode !== appState.layoutMode) {
             setState({ layoutMode: newMode });
 
-            console.log('changed mode to: ', newMode);
+            console.log('🛠️ changed mode to: ', newMode);
 
             if (newMode === 'desktop') {
                 setState({
@@ -307,25 +341,23 @@ function initButtonsPanelActions() {
                 } else {
                     startMic();
                 }
-
-                AudioShared.kickFromGesture();
-
                 break;
 
             case 'btnLogout':
-                disconnectFromConference();
-                if (ctrl) ctrl.disconnect();
-                for (const m of mediaSessions.values()) m.close();
-                mediaSessions.clear();
-
-                const stored = loadStoredCreds();
-                if (stored) {
-                    saveCredsToStorage(stored.server, stored.login, stored.password, false);
-                }
-                
-                setState({ topMenuOpen: false, view: 'login' });
+                logout();
         }
     });
+}
+
+function logout() {
+    disconnectFromConference();
+    try { ctrl?.disconnect?.(1000, 'logout'); } catch { }
+    try { ctrl = null; window.ctrl = null; } catch { }
+    for (const m of mediaSessions.values()) m.close();
+    mediaSessions.clear();
+
+    SessionStore.clearActive();
+    setState({ topMenuOpen: false, view: 'login' });
 }
 
 /* ------------------------------------------------------------------
@@ -337,9 +369,16 @@ function initAuthEvents() {
     document.addEventListener('app:login', (e) => {
         const { server, login, password } = e.detail || {};
 
-        saveCredsToStorage(server, login, password, true);
+        const offline = (navigator.onLine === false);
 
-        startLoginFromUI(server, login, password);
+        const ok = SessionStore.verifyOfflinePassword({ server, login, password });
+        if (!ok) {
+            if (!SessionStore.checkSessionExist({ server, login })) {
+                return showError('Неверный логин или пароль (нет совпадения с сохранённой сессией)');
+            }
+        }
+
+        startLogin(server, login, password);
     });
 
     // Ошибки валидации формы регистрации (пароли не совпадают и т.п.)
@@ -386,7 +425,7 @@ function initAuthEvents() {
                 detail: payload
             }));
         } catch (err) {
-            console.error('registration error', err);
+            console.error('👷 registration error', err);
             showError('Ошибка регистрации: ' + (err.message || 'неизвестная ошибка'));
         }
     });
@@ -438,7 +477,14 @@ function wireControlEvents() {
 }
 
 function handleControlAuth(token) {
-    log('auth ok token received');
+    log('🛠️ Auth on server OK, token received');
+
+    const key = SessionStore.upsert({
+        server: ctrl.server,
+        login: ctrl.login,
+        password: ctrl.password
+    });
+    SessionStore.setActiveKey(key);
 
     setState({
         view: 'main',
@@ -468,7 +514,7 @@ function handleConnectToConferenceResponse(resp) {
         return;
     }
 
-    log('connected_to_conference: ' + resp.name);
+    log('🛠️ connected_to_conference: ' + resp.name);
 
     const isMobile = appState.layoutMode === 'mobile';
     
@@ -483,7 +529,7 @@ function handleConnectToConferenceResponse(resp) {
         showChatPanel: !isMobile && appState.showChatPanel,
     });
 
-    localStorage.setItem('vg_current_conf', resp.tag);
+    Storage.setSetting('media.currentConference', resp.tag);
 
     ringer.Ring(RingType.Dial);
 
@@ -492,7 +538,7 @@ function handleConnectToConferenceResponse(resp) {
 }
 
 function handleDisconnectFromConference() {
-    log('disconnecting from conference received');
+    log('🛠️ disconnecting from conference received');
     disconnectFromConference();
 }
 
@@ -506,7 +552,7 @@ function handleDeviceConnected(device) {
     if (device.connect_type === 1 /* CreatedDevice */) {
         if (device.device_type == 1) { // Camera
             if (!cam) {
-                console.warn('[Cam] CreatedDevice received but local capture is not started; dropping device');
+                console.warn('🛠️ [Cam] CreatedDevice received but local capture is not started; dropping device');
                 ctrl.sendDisconnectDevice(device.device_id);
                 return;
             }
@@ -526,15 +572,15 @@ function handleDeviceConnected(device) {
                 ssrc: device.author_ssrc,
                 port: device.port,
                 keyHex: device.secure_key,
-            }).catch((e) => console.error('[Cam] attachRemote failed', e));
+            }).catch((e) => console.error('🛠️ [Cam] attachRemote failed', e));
 
-            log(`Camera attached id=${device.device_id} ssrc=${device.author_ssrc}`);
+            log(`🛠️ Camera attached id=${device.device_id} ssrc=${device.author_ssrc}`);
             return;
         }
 
         if (device.device_type == 2) { // Demonstration
             if (!scr) {
-                console.warn('[Screen] CreatedDevice received but local capture is not started; dropping device');
+                console.warn('🛠️ [Screen] CreatedDevice received but local capture is not started; dropping device');
                 ctrl.sendDisconnectDevice(device.device_id);
                 return;
             }
@@ -554,15 +600,15 @@ function handleDeviceConnected(device) {
                 ssrc: device.author_ssrc,
                 port: device.port,
                 keyHex: device.secure_key,
-            }).catch((e) => console.error('[Screen] attachRemote failed', e));
+            }).catch((e) => console.error('🛠️ [Screen] attachRemote failed', e));
 
-            log(`Screen capture attached id=${device.device_id} ssrc=${device.author_ssrc}`);
+            log(`🛠️ Screen capture attached id=${device.device_id} ssrc=${device.author_ssrc}`);
             return;
         }
 
         if (device.device_type == 4) { // Microphone
             if (!mic) {
-                console.warn('[Microphone] CreatedDevice received but local capture is not started; dropping device');
+                console.warn('🛠️ [Microphone] CreatedDevice received but local capture is not started; dropping device');
                 ctrl.sendDisconnectDevice(device.device_id);
                 return;
             }
@@ -574,14 +620,14 @@ function handleDeviceConnected(device) {
                 ssrc: device.author_ssrc,
                 port: device.port,
                 keyHex: device.secure_key,
-            }).catch((e) => console.error('[Microphone] attachRemote failed', e));
+            }).catch((e) => console.error('🛠️ [Microphone] attachRemote failed', e));
 
-            log(`Microphone attached id=${device.device_id} ssrc=${device.author_ssrc}`);
+            log(`🛠️ Microphone attached id=${device.device_id} ssrc=${device.author_ssrc}`);
             return;
         }
     } else if (device.connect_type === 2) {
         const key = `dev_${device.device_id}_${device.client_id}`;
-        if (mediaSessions.has(key)) { log('media already exists'); return; }
+        if (mediaSessions.has(key)) { log('🛠️ media already exists'); return; }
 
         if (device.my === 1 /*&& device.device_type === 4*/) {
             return;
@@ -608,12 +654,12 @@ function handleDeviceConnected(device) {
         if (ms.channelType === 'audio') {
             ms.initAudio()
                 .then(() => ms.start())
-                .catch(e => console.error('[Call] initAudio failed', e));
+                .catch(e => console.error('🛠️ [Call] initAudio failed', e));
         } else {
             ms.start((el) => {
                 const container = document.getElementById('streams');
                 if (!container) {
-                    console.warn('[Call] streams container not found');
+                    console.warn('🛠️ [Call] streams container not found');
                     return;
                 }
                 container.appendChild(el);
@@ -628,25 +674,25 @@ function handleDeviceDisconnect(device) {
     if (channel) {
         channel.stop();
         mediaSessions.delete(key);
-        log('channel closed: ' + key);
+        log('🛠️ channel closed: ' + key);
     }
     else if (cam && device.device_id == cam.deviceId) {
         cam.stop();
         cam = null;
         setState({ camEnabled: false });
-        log('camera disabled');
+        log('🛠️ camera disabled');
     }
     else if (scr && device.device_id == scr.deviceId) {
         scr.stop();
         scr = null;
         setState({ demoEnabled: false });
-        log('screen capture disabled');
+        log('🛠️ screen capture disabled');
     }
     else if (mic && device.device_id == mic.deviceId) {
         mic.stop();
         mic = null;
         setState({ micEnabled: false });
-        log('microphone disabled');
+        log('🛠️ microphone disabled');
     }
 }
 
@@ -698,13 +744,13 @@ function handleNewMessage(newMsgs) {
 function handleControlError(err) {
     if (appState.view === 'login') {
         showError(`Сервер ${ctrl.server} недоступен`);
+        ctrl.disconnect();
     }
-    //ctrl.disconnect();
-    log('WSS error: ' + (err?.message || err?.type || String(err)));
+    log('🛠️ WSS error: ' + (err?.message || err?.type || String(err)));
 }
 
 function handleControlClose() {
-    log('Control connection ends');
+    log('🛠️ Control connection ends');
 
     if (cam) cam.stop();
     cam = null;
@@ -726,46 +772,28 @@ function handleControlClose() {
     });
 }
 
-function startLoginFromUI(server, login, pass, opts = {}) {
+function startLogin(server, login, password, opts = {}) {
     if (!server || !login) {
         showError('Укажите сервер и логин');
         return;
     }
 
-    if (!pass) {
+    if (!password) {
         showError('Укажите пароль');
         return;
     }
 
-    const stored = loadStoredCreds();
-    if (stored) {
-        if (stored.login == login && stored.pass == pass) {
-            setState({ view: 'main' });
-        } else {
-            showError('Неверный логин или пароль');
-        }
-    }
-
+    setState({ view: 'main' });
+    
     ctrl = new ControlWS({
         server,
         login,
-        password: pass,
+        password,
         autoReconnect: true,
     });
     window.ctrl = ctrl;
     wireControlEvents();
 }
-
-/* ------------------------------------------------------------------
- * Автолигин из storage
- * ------------------------------------------------------------------ */
-
-(function tryAutoFromStorage() {
-    const stored = loadStoredCreds();
-    if (stored && stored.autoLogin) {
-        startLoginFromUI(stored.server, stored.login, stored.pass);
-    }
-})();
 
 /* ------------------------------------------------------------------
  * Медиа утилиты
@@ -802,7 +830,7 @@ async function startMic() {
 
         ctrl.sendDeviceParamsMic({ name: 'Browser Mic' });
     } catch (e) {
-        console.error('startMic error:', e);
+        console.error('🛠️ startMic error:', e);
 
         let msg = 'Не удалось получить доступ к микрофону.';
 
@@ -858,7 +886,7 @@ async function startCam() {
         c?.classList.add('mirror-x');
         cam.setPreviewCanvas(c);
     } catch (e) {
-        console.error('startCam error:', e);
+        console.error('🛠️ startCam error:', e);
 
         let msg = 'Не удалось получить доступ к камере.';
 
@@ -908,7 +936,7 @@ async function startScreenShare() {
         setState({ demoEnabled: true });
         scr.setPreviewCanvas(document.getElementById('demoPreview'));
     } catch (e) {
-        console.error('startScreenShare error:', e);
+        console.error('🛠️ startScreenShare error:', e);
 
         let msg = 'Не удалось получить доступ к Захвату экрана';
 
@@ -971,8 +999,8 @@ function disconnectFromConference() {
     });
 
     if (appState.online) {
-        localStorage.removeItem('vg_current_conf');
+        Storage.setSetting('media.currentConference', '');
     }
 
-    log('disconnected from conference');
+    log('🛠️ disconnected from conference');
 }
