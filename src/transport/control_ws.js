@@ -7,11 +7,11 @@
 
 import { showError } from '../ui/modal.js';
 import { EventBus } from '../core/event_bus.js';
-import { Storage } from '../data/storage.js';
+import { Storage, closeDb } from '../data/storage.js';
 import { MemberList } from '../data/member_list.js';
 import { MessagesStorage } from '../data/messages_storage.js';
 import { setState, appState } from '../core/app_state.js';
-import { SessionStore, ensureWsUrl } from '../data/session_store.js';
+import { deleteIndexedDb, ensureWsUrl, normalizeServer } from '../data/session_store.js';
 
 function bumpUnreadCounts(newMsgs) {
     if (!Array.isArray(newMsgs) || !newMsgs.length) return;
@@ -237,6 +237,9 @@ export class ControlWS {
                     this.autoReconnect = false;
                     
                     this.disconnect();
+
+                    closeDb();
+                    deleteIndexedDb(normalizeServer(this.server), this.login);
 
                     setState({ view: 'login' });
 

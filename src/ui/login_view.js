@@ -1,7 +1,7 @@
 // src/ui/login_view.js
 import { appState, setState } from '../core/app_state.js';
 import { SessionStore, normalizeServer } from '../data/session_store.js';
-import { confirmDialog } from '../ui/modal.js';
+import { confirmDialog, showError } from '../ui/modal.js';
 
 export function renderLoginView(root, state) {
     if (!root) return;
@@ -166,7 +166,10 @@ export function renderLoginView(root, state) {
 
         if (!ok) return;
 
-        SessionStore.remove(key);
+        const res = await SessionStore.removeWithDb(key);
+        if (res.db?.reason === 'blocked') {
+            showError('Локальная база данных будет удалена когда вы закроете вкладку или обновите страницу');
+        }
 
         // если удалили текущую выбранную — очистим поля аккуратно, оставим server/login как есть
         sessionEl.value = '';

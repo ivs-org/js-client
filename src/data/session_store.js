@@ -3,6 +3,8 @@
 const LS_SESSIONS = 'vg_sessions_v2';       // map: sessionKey -> {server, login, pass, lastUsedAt}
 const SS_ACTIVE = 'vg_active_session_v2'; // sessionKey (per-tab)
 
+import { closeDb } from './storage.js';
+
 function safeJsonParse(s) { try { return JSON.parse(s); } catch { return null; } }
 function safeJsonStringify(o) { try { return JSON.stringify(o); } catch { return ''; } }
 
@@ -44,6 +46,37 @@ export function normalizeServer(serverInput) {
 
 function makeSessionKey(server, login) {
     return `${String(server || '').toLowerCase()}|${String(login || '').toLowerCase()}`;
+}
+
+export function deleteIndexedDb(server, login) {
+    return new Promise((resolve) => {
+        if (!server || !login) return resolve({ ok: false, reason: 'no_db_name' });
+
+        let settled = false;
+
+        const req = indexedDB.deleteDatabase(makeDbName(server, login));
+
+        req.onsuccess = () => {
+            if (settled) return;
+            settled = true;
+            resolve({ ok: true });
+        };
+
+        req.onerror = () => {
+            if (settled) return;
+            settled = true;
+            console.warn('[SessionStore] deleteDatabase error', req.error);
+            resolve({ ok: false, reason: 'error', error: req.error });
+        };
+
+        // если где-то есть открытая вкладка/соединение с этой БД — будет blocked
+        req.onblocked = () => {
+            if (settled) return;
+            settled = true;
+            console.warn('[SessionStore] deleteDatabase blocked');
+            resolve({ ok: false, reason: 'blocked' });
+        };
+    });
 }
 
 // лёгкий стабильный хэш (FNV-1a) — чтобы имя БД было коротким и без сюрпризов
@@ -279,6 +312,23 @@ export const SessionStore = {
     getMostRecentKey() {
         const sessions = this.listSessions();
         return sessions[0]?.key || '';
+    },
+
+    // Полная очистка при удалении логина
+    async removeWithDb(sessionKey) {
+        const key = String(sessionKey || '');
+        if (!key) return { removed: false, db: { ok: false, reason: 'no_key' } };
+
+        const s = this.getByKey(key);
+        if (!s) return { removed: false, db: { ok: false, reason: 'no_session' } };
+
+        const removed = this.remove(key);
+
+        try { closeDb; } catch {}
+
+        const db = await deleteIndexedDb(s.server, s.login);
+
+        return { removed, db };
     },
 
     // Возвращает true только если есть сохранённая сессия и пароль совпал

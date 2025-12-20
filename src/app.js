@@ -10,7 +10,7 @@
 import { parseLaunchParams } from './core/launch_params.js';
 import { SessionStore, makeDbName, normalizeServer } from './data/session_store.js';
 import { setDbName } from './data/storage.js';
-import { Storage } from './data/storage.js';
+import { Storage, closeDb } from './data/storage.js';
 import { setState, appState } from './core/app_state.js';
 import { MemberList } from './data/member_list.js';
 import { MessagesStorage, setSelfId as messagesSetSelfId } from './data/messages_storage.js';
@@ -60,7 +60,9 @@ export const ringer = new Ringer({ baseUrl: '/assets/sounds', volume: 0.9 });
 // Хранилище
 // ─────────────────────────────────────
 
-async function initDataLayer() {
+async function initDataLayer(server, login) {
+    setDbName(makeDbName(server, login));
+
     await Storage.init();
 
     Storage.subscribe(() => {
@@ -143,19 +145,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         launchParams: launch,       // удобно держать в state
     });
 
-    // Выбираем DB имя:
-    // - если login уже известен (автологин) => server+login
-    // - если login пустой => сделаем временную DB на server (или дефолт)
-    const server = boot.session.server || normalizeServer(boot.session.server);
-    if (server && boot.session.login) {
-        setDbName(makeDbName(server, boot.session.login));
-    } else if (server) {
-        setDbName(`videograce_offline_${server}`); // временная на host (можно тоже захэшировать)
-    } else {
-        setDbName('videograce_offline'); // fallback
+    if (boot.session.server && boot.session.login) {
+        await initDataLayer(boot.session.server, boot.session.login);
     }
-
-    await initDataLayer();
 
     await initAudio();
     initResponsiveLayout();
@@ -164,6 +156,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initAuthEvents();
 
     if (boot.canAutoLogin) {
+        await initDataLayer(boot.session.server, boot.session.login);
         startLogin(boot.session.server, boot.session.login, boot.session.pass);
     } else if (boot.forceLogin) {
         setState({ view: 'login' });
@@ -357,6 +350,9 @@ function logout() {
     mediaSessions.clear();
 
     SessionStore.clearActive();
+
+    closeDb();
+
     setState({ topMenuOpen: false, view: 'login' });
 }
 
@@ -369,6 +365,7 @@ function initAuthEvents() {
     document.addEventListener('app:login', (e) => {
         const { server, login, password } = e.detail || {};
 
+        initDataLayer(server, login).then();
         startLogin(server, login, password);
     });
 

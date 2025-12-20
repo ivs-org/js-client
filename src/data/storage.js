@@ -117,11 +117,20 @@ export function openDb() {
         req.onsuccess = () => {
             _dbInstance = req.result;
             resolve(_dbInstance);
+            console.log(`💾 Storage opened db ${DB_NAME} ver: ${DB_VERSION}`);
         };
         req.onerror = () => reject(req.error);
     });
 
     return dbPromise;
+}
+
+export function closeDb() {
+    try {
+        dbPromise?.close();
+        console.log(`💾 Storage closed db ${DB_NAME} ver: ${DB_VERSION}`);
+    } catch { }
+    dbPromise = null;
 }
 
 function withStore(name, mode, fn) {
@@ -171,8 +180,9 @@ export const Storage = {
                 loadAllFromStore(STORE_CONFS),
                 loadAllFromStore(STORE_SETTINGS),
             ]);
+            console.log('💾 Storage init and loaded');
         } catch (err) {
-            console.warn('[Storage] init load error', err);
+            console.warn('💾 Storage init load error', err);
             groups = [];
             members = [];
             confs = [];
