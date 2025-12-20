@@ -275,45 +275,10 @@ export const SessionStore = {
         return true;
     },
 
-    // offline-login: проверяем точное совпадение учётки
-    matchOffline({ server, login, pass }) {
-        const srv = normalizeServer(server);
-        const lg = String(login || '').trim().toLowerCase();
-        const pw = String(pass || '');
-
-        if (!srv || !lg) return null;
-
-        const key = makeSessionKey(srv, lg);
-        const s = this.getByKey(key);
-        if (!s) return null;
-
-        if ((s.pass || '') === pw) return s;
-        return null;
-    },
-
-    // “последний вход” для UI — вычислим без LS_LAST
+    // 'последний вход' для UI — вычислим без LS_LAST
     getMostRecentKey() {
         const sessions = this.listSessions();
         return sessions[0]?.key || '';
-    },
-
-    checkSessionExist({ server, login }) {
-        const srv = normalizeServer(server);
-        const lg = String(login || '').trim().toLowerCase();
-
-        if (!srv || !lg) return false;
-
-        const map = loadSessionsMap();
-        const key = makeSessionKey(srv, lg);
-        const s = map[key];
-
-        if (!s) return false;
-
-        const saved = String(s.pass || '');
-        // если сохранённого пароля нет — оффлайн логин запрещаем
-        if (!saved) return true;
-
-        return true;
     },
 
     // Возвращает true только если есть сохранённая сессия и пароль совпал

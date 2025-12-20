@@ -369,15 +369,6 @@ function initAuthEvents() {
     document.addEventListener('app:login', (e) => {
         const { server, login, password } = e.detail || {};
 
-        const offline = (navigator.onLine === false);
-
-        const ok = SessionStore.verifyOfflinePassword({ server, login, password });
-        if (!ok) {
-            if (!SessionStore.checkSessionExist({ server, login })) {
-                return showError('Неверный логин или пароль (нет совпадения с сохранённой сессией)');
-            }
-        }
-
         startLogin(server, login, password);
     });
 
@@ -783,8 +774,11 @@ function startLogin(server, login, password, opts = {}) {
         return;
     }
 
-    setState({ view: 'main' });
-    
+    const ok = SessionStore.verifyOfflinePassword({ server, login, password });
+    if (ok) {
+        setState({ view: 'main' });
+    }
+
     ctrl = new ControlWS({
         server,
         login,
