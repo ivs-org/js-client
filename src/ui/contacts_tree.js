@@ -73,7 +73,11 @@ export function buildContactsTree(contactsData) {
         for (const g of groupsOfMember) {
             const parent = groupById.get(g.id);
             if (!parent) continue;
-            parent.children.push(memberNode);
+
+            const isDuplicate = parent.children.some(child => child.id === memberNode.id);
+            if (!isDuplicate) {
+                parent.children.push(memberNode);
+            }
         }
     }
 

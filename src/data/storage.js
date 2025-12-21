@@ -41,7 +41,7 @@ const settingsByKey = new Map();
 
 let contactsMeta = {
     sort_type: 1,       // 1=Name, 2=Number, 0=Undefined
-    show_numbers: true,
+    show_numbers: false,
     conferencesRolled: true,
 };
 
@@ -300,27 +300,112 @@ export const Storage = {
     },
 
     async applyContactList(contactList) {
-        const { members, sort_type, show_numbers } = contactList || {};
+        const { members, sort_type, show_numbers, full } = contactList || {};
         const list = Array.isArray(members) ? members : [];
 
-        const prev = new Map(contactsById); 
+        // Когда сервер начнёт явно слать "полный снапшот" — можно включить.
+        // Сейчас — частичные апдейты, поэтому full обычно false/undefined.
+        const isFull = !!full;
 
-        for (const m of list) {
-            const old = prev.get(m.id);
-            contactsById.set(m.id, {
-                ...m,
-                unreaded_count: old ? (old.unreaded_count || 0) : (m.unreaded_count || 0),
-            });
+        // мета (обновляем только если поле реально пришло)
+        let metaChanged = false;
+        if (typeof sort_type === 'number' && sort_type !== contactsMeta.sort_type) {
+            contactsMeta.sort_type = sort_type;
+            metaChanged = true;
+        }
+        if (typeof show_numbers === 'number' && !!show_numbers !== contactsMeta.show_numbers) {
+            contactsMeta.show_numbers = !!show_numbers;
+            metaChanged = true;
+        }
+        if (typeof show_numbers === 'undefined' && !!contactsMeta.show_numbers) {
+            contactsMeta.show_numbers = false;
+            metaChanged = true;
         }
 
-        contactsMeta = {
-            sort_type: typeof sort_type === 'number' ? sort_type : 0,
-            show_numbers: !!show_numbers,
+        // операции для IndexedDB
+        const puts = [];
+        const dels = [];
+
+        let changed = metaChanged;
+
+        // Для режима full: будем знать кто "должен" остаться
+        const seen = isFull ? new Set() : null;
+
+        // helper: стоит ли писать put в IDB (дешёвая проверка только по ключам патча)
+        const hasPatchChange = (oldObj, patchObj) => {
+            if (!oldObj) return true;
+            for (const k of Object.keys(patchObj)) {
+                // если поле реально отличается — пишем
+                if (oldObj[k] !== patchObj[k]) return true;
+            }
+            return false;
         };
 
-        await withStore(STORE_MEMBERS, 'readwrite', s => {
-            s.clear();
-            for (const m of contactsById.values()) s.put(m);
+        for (const src of list) {
+            if (!src || typeof src.id === 'undefined') continue;
+
+            const id = src.id;
+
+            // deleted апдейт
+            if (src.deleted) {
+                if (contactsById.has(id)) {
+                    contactsById.delete(id);
+                    changed = true;
+                }
+                dels.push(id);
+                continue;
+            }
+
+            if (isFull) seen.add(id);
+
+            const old = contactsById.get(id) || null;
+
+            // В full-режиме считаем, что сервер прислал "полную" карточку контакта,
+            // но локальные счетчики (unreaded_count) всё равно бережём.
+            // В patch-режиме — обычный merge.
+            const merged = isFull
+                ? { ...src }
+                : { ...(old || {}), ...src };
+
+            // Preserve local unread if server не прислал (обычный кейс)
+            if (old && typeof src.unreaded_count === 'undefined') {
+                merged.unreaded_count = old.unreaded_count || 0;
+            } else if (!old) {
+                merged.unreaded_count = merged.unreaded_count || 0;
+            }
+
+            // Обновим кэш
+            contactsById.set(id, merged);
+
+            // Решаем: писать ли в IndexedDB
+            // (в patch-режиме: только если реально что-то изменилось в полях патча;
+            //  в full-режиме: пишем всегда, т.к. это "истина" с сервера)
+            const needWrite = isFull ? true : hasPatchChange(old, src);
+            if (needWrite) puts.push(merged);
+
+            // Для notify/UI
+            if (!old) changed = true;
+            else if (!changed && needWrite) changed = true;
+        }
+
+        // В режиме full: удалим тех, кто "пропал" из снапшота
+        if (isFull && seen) {
+            for (const id of Array.from(contactsById.keys())) {
+                if (!seen.has(id)) {
+                    contactsById.delete(id);
+                    dels.push(id);
+                    changed = true;
+                }
+            }
+        }
+
+        // Ничего не изменилось — ничего не пишем и не дергаем UI
+        if (!changed && puts.length === 0 && dels.length === 0) return;
+
+        // Пишем точечно: delete + put, без store.clear()
+        await withStore(STORE_MEMBERS, 'readwrite', (s) => {
+            for (const id of dels) s.delete(id);
+            for (const m of puts) s.put(m);
         });
 
         notify();
