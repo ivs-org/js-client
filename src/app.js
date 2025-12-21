@@ -7,10 +7,9 @@
 
 "use strict";
 
-import { parseLaunchParams } from './core/launch_params.js';
+import { UrlBoot } from './core/url_boot.js';
 import { SessionStore, makeDbName, normalizeServer } from './data/session_store.js';
-import { setDbName } from './data/storage.js';
-import { Storage, closeDb } from './data/storage.js';
+import { Storage, closeDb, setDbName } from './data/storage.js';
 import { setState, appState } from './core/app_state.js';
 import { MemberList } from './data/member_list.js';
 import { MessagesStorage, setSelfId as messagesSetSelfId } from './data/messages_storage.js';
@@ -55,6 +54,39 @@ let ctrlEventUnsubscribers = [];
 const mediaSessions = new Map();
 
 export const ringer = new Ringer({ baseUrl: '/assets/sounds', volume: 0.9 });
+
+// ─────────────────────────────────────
+// Точка входа
+// ─────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', async () => {
+    UrlBoot.stashFromUrlAndCleanUrl();
+
+    const boot = SessionStore.bootstrap({ urlServer: UrlBoot.getBootServer() });
+
+    // прокинем в appState — чтобы login_view показал правильные поля
+    setState({
+        auth: {
+            server: boot.session.server || '',
+            login: boot.session.login || '',
+            password: '', // пароль не светим в UI
+        },
+    });
+
+    await initAudio();
+    initResponsiveLayout();
+    initLayout();
+    initButtonsPanelActions();
+    await initAuthEvents();
+
+    if (boot.canAutoLogin) {
+        await startLogin(boot.session.server, boot.session.login, boot.session.pass);
+    } else if (boot.forceLogin) {
+        setState({ view: 'login' });
+    }
+
+    await initSW();
+});
 
 // ─────────────────────────────────────
 // Хранилище
@@ -127,43 +159,6 @@ async function initAudio() {
         }
     }, { once: true });
 }
-
-// ─────────────────────────────────────
-// Точка входа
-// ─────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
-    const launch = parseLaunchParams();
-    const boot = SessionStore.bootstrap({ urlServer: launch.server });
-
-    // прокинем в appState — чтобы login_view показал правильные поля
-    setState({
-        auth: {
-            server: boot.session.server || '',
-            login: boot.session.login || '',
-            password: '', // пароль не светим в UI
-        },
-        launchParams: launch,       // удобно держать в state
-    });
-
-    if (boot.session.server && boot.session.login) {
-        await initDataLayer(boot.session.server, boot.session.login);
-    }
-
-    await initAudio();
-    initResponsiveLayout();
-    initLayout();
-    initButtonsPanelActions();
-    initAuthEvents();
-
-    if (boot.canAutoLogin) {
-        await initDataLayer(boot.session.server, boot.session.login);
-        startLogin(boot.session.server, boot.session.login, boot.session.pass);
-    } else if (boot.forceLogin) {
-        setState({ view: 'login' });
-    }
-
-    await initSW();
-});
 
 // ─────────────────────────────────────
 // Web push
@@ -360,13 +355,12 @@ function logout() {
  * Регистрация
  * ------------------------------------------------------------------ */
 
-function initAuthEvents() {
+async function initAuthEvents() {
     // Логин
-    document.addEventListener('app:login', (e) => {
+    document.addEventListener('app:login', async (e) => {
         const { server, login, password } = e.detail || {};
 
-        initDataLayer(server, login).then();
-        startLogin(server, login, password);
+        await startLogin(server, login, password);
     });
 
     // Ошибки валидации формы регистрации (пароли не совпадают и т.п.)
@@ -473,6 +467,8 @@ function handleControlAuth(token) {
         password: ctrl.password
     });
     SessionStore.setActiveKey(key);
+
+    UrlBoot.clearBootServer();
 
     setState({
         view: 'main',
@@ -760,7 +756,7 @@ function handleControlClose() {
     });
 }
 
-function startLogin(server, login, password, opts = {}) {
+async function startLogin(server, login, password, opts = {}) {
     if (!server || !login) {
         showError('Укажите сервер и логин');
         return;
@@ -770,6 +766,8 @@ function startLogin(server, login, password, opts = {}) {
         showError('Укажите пароль');
         return;
     }
+
+    await initDataLayer(server, login);
 
     const ok = SessionStore.verifyOfflinePassword({ server, login, password });
     if (ok) {

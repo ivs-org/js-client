@@ -1,26 +1,33 @@
 // src/ui/login_view.js
 import { appState, setState } from '../core/app_state.js';
 import { SessionStore, normalizeServer } from '../data/session_store.js';
+import { UrlBoot } from '../core/url_boot.js';
 import { confirmDialog, showError } from '../ui/modal.js';
 
 export function renderLoginView(root, state) {
     if (!root) return;
 
     const auth = (state && state.auth) ? state.auth : (appState.auth || {});
-    const server = auth.server || '';
-    const login = auth.login || '';
+    const serverFromState = (auth.server || '').trim();
+    const loginFromState = (auth.login || '').trim();
 
-    const sessions = SessionStore.listSessions();           // [{key, server, login, pass, lastUsedAt}]
-    const activeKey = SessionStore.getActiveKey();          // per-tab
-    const mostRecentKey = SessionStore.getMostRecentKey();  // for UI hints
+    const bootServer = String(UrlBoot.getBootServer?.() || '').trim(); // host
+    const isBootLocked = !!bootServer;
 
-    // выберем стартовую опцию селекта:
-    // 1) то, что уже в auth.sessionKey
-    // 2) активная вкладочная
-    // 3) просто самая свежая (для подсказки, НЕ для автологина)
-    let initialKey = (auth.sessionKey || '').trim();
-    if (!initialKey) initialKey = (activeKey || '').trim();
-    if (!initialKey) initialKey = (mostRecentKey || '').trim();
+    const sessions = SessionStore.listSessions();                  // [{key, server, login, pass, lastUsedAt}]
+    const activeKey = String(SessionStore.getActiveKey?.() || ''); // per-tab
+    const mostRecentKey = String(SessionStore.getMostRecentKey?.() || '');
+
+    // initialKey:
+    // - если сервер задан ссылкой: берём самую свежую сессию ТОЛЬКО на этом сервере
+    // - иначе: auth.sessionKey -> activeKey -> mostRecentKey
+    let initialKey = String(auth.sessionKey || '').trim();
+    if (isBootLocked) {
+        initialKey = getMostRecentKeyForServer(sessions, bootServer) || '';
+    } else {
+        if (!initialKey) initialKey = activeKey.trim();
+        if (!initialKey) initialKey = mostRecentKey.trim();
+    }
 
     // сгруппировать по server
     const byServer = new Map(); // server -> sessions[]
@@ -34,7 +41,11 @@ export function renderLoginView(root, state) {
         arr.sort((a, b) => (b.lastUsedAt || 0) - (a.lastUsedAt || 0));
     }
 
-    const selectOptions = renderSessionOptions(byServer, initialKey);
+    const selectOptions = renderSessionOptions(byServer, initialKey, {
+        lockedServer: isBootLocked ? bootServer : ''
+    });
+
+    const effectiveServer = isBootLocked ? bootServer : (serverFromState || '');
 
     root.innerHTML = `
       <div class="auth-shell">
@@ -57,6 +68,8 @@ export function renderLoginView(root, state) {
             <div class="auth-field">
               <label>Сохранённые сессии</label>
 
+              <div id="bootBanner" class="auth-hint"></div>
+
               <div class="auth-row">
                 <select id="sessionSelect" class="auth-select">
                   ${selectOptions}
@@ -75,13 +88,13 @@ export function renderLoginView(root, state) {
               <label for="loginServer">Сервер</label>
               <input id="loginServer" type="text"
                      placeholder="vks.example.com"
-                     value="${escapeHtml(server)}" />
+                     value="${escapeHtml(effectiveServer)}" />
             </div>
 
             <div class="auth-field">
               <label for="loginLogin">Логин</label>
               <input id="loginLogin" type="text"
-                     value="${escapeHtml(login)}" />
+                     value="${escapeHtml(loginFromState)}" />
             </div>
 
             <div class="auth-field">
@@ -102,6 +115,7 @@ export function renderLoginView(root, state) {
       </div>
     `;
 
+    const bootEl = root.querySelector('#bootBanner');
     const sessionEl = root.querySelector('#sessionSelect');
     const metaEl = root.querySelector('#sessionMeta');
     const delEl = root.querySelector('#btnDeleteSession');
@@ -114,39 +128,49 @@ export function renderLoginView(root, state) {
 
     if (!sessionEl || !serverEl || !loginEl || !passEl || !submitEl) return;
 
-    // применим initialKey (и обновим мету) если он реально существует
+    // --- URL lock banner + server lock
+    if (isBootLocked) {
+        serverEl.value = bootServer;
+        serverEl.disabled = true;
+        renderBootBanner(bootEl, bootServer);
+    } else {
+        serverEl.disabled = false;
+        if (bootEl) bootEl.textContent = '';
+    }
+
+    // --- initial apply (NO setState here!)
     if (initialKey) {
         const s = SessionStore.getByKey(initialKey);
-        if (s) {
+        if (s && (!isBootLocked || String(s.server).toLowerCase() === String(bootServer).toLowerCase())) {
             sessionEl.value = initialKey;
-            applySessionToInputs(s, serverEl, loginEl, passEl);
+            applySessionToInputs(s, serverEl, loginEl, passEl, { lockedServer: isBootLocked ? bootServer : '' });
+            updateMeta(metaEl, s, activeKey, mostRecentKey);
+        } else {
+            updateMeta(metaEl, null, activeKey, mostRecentKey);
         }
+    } else {
+        updateMeta(metaEl, null, activeKey, mostRecentKey);
     }
-    updateMeta(metaEl, SessionStore.getByKey(sessionEl.value), activeKey, mostRecentKey);
 
-    // если выбирают из селекта — подставляем поля и сохраняем sessionKey в state (для UI)
+    // --- handlers (here setState is OK, but we use it only for view switches)
     sessionEl.addEventListener('change', () => {
         const key = sessionEl.value || '';
         const s = key ? SessionStore.getByKey(key) : null;
 
-        if (s) {
-            applySessionToInputs(s, serverEl, loginEl, passEl);
-            setState({ auth: { ...(state.auth || {}), server: s.server, login: s.login, sessionKey: key } });
-        } else {
-            setState({ auth: { ...(state.auth || {}), sessionKey: '' } });
-        }
-
-        updateMeta(metaEl, s, activeKey, mostRecentKey);
-    });
-
-    // если юзер руками меняет server/login — это уже “новая сессия”, селект сбрасываем
-    const clearSelect = () => {
-        if (sessionEl.value) {
+        // safety: при URL-локе не даём выбрать чужой сервер
+        if (isBootLocked && s && String(s.server).toLowerCase() !== String(bootServer).toLowerCase()) {
             sessionEl.value = '';
             updateMeta(metaEl, null, activeKey, mostRecentKey);
-            setState({ auth: { ...(state.auth || {}), sessionKey: '' } });
+            return;
         }
-    };
+
+        if (s) {
+            applySessionToInputs(s, serverEl, loginEl, passEl, { lockedServer: isBootLocked ? bootServer : '' });
+            updateMeta(metaEl, s, activeKey, mostRecentKey);
+        } else {
+            updateMeta(metaEl, null, activeKey, mostRecentKey);
+        }
+    });
 
     // удалить выбранный логин
     delEl?.addEventListener('click', async () => {
@@ -154,41 +178,35 @@ export function renderLoginView(root, state) {
         if (!key) return;
 
         const s = SessionStore.getByKey(key);
-       
-        let ok = await confirmDialog({
+        if (!s) return;
+
+        const ok = await confirmDialog({
             title: 'Удалить сохранённый вход?',
-            message: `Сессия будет удалена:\n${s.server} / ${s.login}`,
+            message: `Сессия будет удалена:\n${s.server} / ${s.login}\n\nЛокальная база (IndexedDB) тоже будет удалена.`,
             okText: 'Удалить',
             cancelText: 'Отмена',
-            avatarUrl: '',                               // если у логина/юзера есть аватар — подставишь
+            avatarUrl: '',
             avatarLetter: (s.login || '?')[0]?.toUpperCase() || '?',
         });
 
         if (!ok) return;
 
         const res = await SessionStore.removeWithDb(key);
-        if (res.db?.reason === 'blocked') {
+        if (res?.db?.reason === 'blocked') {
             showError('Локальная база данных будет удалена когда вы закроете вкладку или обновите страницу');
         }
 
-        // если удалили текущую выбранную — очистим поля аккуратно, оставим server/login как есть
-        sessionEl.value = '';
-        updateMeta(metaEl, null, activeKey, mostRecentKey);
-
-        // форс-рендер (чтобы optgroup пересобрались)
+        // перерисуем экран, чтобы обновить optgroup/options
         setState({ view: 'login' });
     });
 
     // submit
     submitEl.addEventListener('click', () => {
-        const payload = {
-            server: normalizeServer(serverEl.value.trim()),
-            login: loginEl.value.trim(),
-            password: passEl.value,
-            // sessionKey здесь не обязателен, но удобно передать
-            sessionKey: sessionEl.value || ''
-        };
+        const srv = isBootLocked ? bootServer : normalizeServer(serverEl.value.trim());
+        const lg = loginEl.value.trim();
+        const pw = passEl.value;
 
+        const payload = { server: srv, login: lg, password: pw, sessionKey: sessionEl.value || '' };
         document.dispatchEvent(new CustomEvent('app:login', { detail: payload }));
     });
 
@@ -200,15 +218,58 @@ export function renderLoginView(root, state) {
     });
 
     regLink?.addEventListener('click', () => setState({ view: 'register' }));
+
+    // banner actions
+    bootEl?.addEventListener('click', (ev) => {
+        const t = ev.target;
+        if (!(t instanceof HTMLElement)) return;
+
+        if (t.id === 'btnBootClear') {
+            UrlBoot.clearBootServer?.();
+            setState({ view: 'login' });
+        }
+    });
 }
 
-function renderSessionOptions(byServer, selectedKey) {
+function getMostRecentKeyForServer(sessions, server) {
+    const srv = String(server || '').toLowerCase();
+    if (!srv) return '';
+
+    let bestKey = '';
+    let bestTs = 0;
+
+    for (const s of sessions || []) {
+        if (!s?.key) continue;
+        if (String(s.server || '').toLowerCase() !== srv) continue;
+        const ts = s.lastUsedAt || 0;
+        if (ts > bestTs) { bestTs = ts; bestKey = s.key; }
+    }
+    return bestKey;
+}
+
+function renderBootBanner(el, bootServer) {
+    if (!el) return;
+
+    const srv = escapeHtml(bootServer || '');
+    el.innerHTML = `
+      <span>Сервер задан ссылкой: <b>${srv}</b>.</span>
+      <button id="btnBootClear" type="button" class="link-btn" style="margin-left:10px;">
+        Снять привязку
+      </button>
+    `;
+}
+
+function renderSessionOptions(byServer, selectedKey, { lockedServer = '' } = {}) {
+    const locked = String(lockedServer || '').toLowerCase();
+
     let html = `<option value="">— выбрать —</option>`;
 
     const servers = Array.from(byServer.keys()).sort((a, b) => a.localeCompare(b));
     for (const srv of servers) {
         const items = byServer.get(srv) || [];
-        html += `<optgroup label="${escapeHtml(srv)}">`;
+        const isDisabled = !!(locked && srv !== locked);
+
+        html += `<optgroup label="${escapeHtml(srv)}"${isDisabled ? ' disabled' : ''}>`;
 
         for (const s of items) {
             const key = s.key;
@@ -224,10 +285,10 @@ function renderSessionOptions(byServer, selectedKey) {
     return html;
 }
 
-function applySessionToInputs(sess, serverEl, loginEl, passEl) {
-    serverEl.value = sess.server || '';
+function applySessionToInputs(sess, serverEl, loginEl, passEl, { lockedServer = '' } = {}) {
+    const locked = String(lockedServer || '').trim();
+    serverEl.value = locked ? locked : (sess.server || '');
     loginEl.value = sess.login || '';
-    // если хранишь пароль — можно префиллить
     passEl.value = sess.pass || '';
 }
 
@@ -251,11 +312,7 @@ function updateMeta(metaEl, sess, activeKey, mostRecentKey) {
 }
 
 function formatDt(ts) {
-    try {
-        return new Date(ts).toLocaleString();
-    } catch {
-        return '';
-    }
+    try { return new Date(ts).toLocaleString(); } catch { return ''; }
 }
 
 function escapeHtml(str) {
@@ -268,6 +325,5 @@ function escapeHtml(str) {
 }
 
 function escapeAttr(str) {
-    // value="" в option
     return escapeHtml(str).replace(/`/g, '&#96;');
 }

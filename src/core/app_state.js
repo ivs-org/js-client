@@ -16,6 +16,7 @@ export const appState = {
         login: '',
         password: '',
         autoLogin: false,
+        sessionKey: '',
     },
 
     modal: {
@@ -62,8 +63,6 @@ export const appState = {
     camEnabled: false,
     demoEnabled: false,
     micEnabled: false,
-
-    launchParams: null,
 };
 
 const listeners = new Set();
