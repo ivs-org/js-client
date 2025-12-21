@@ -8,6 +8,7 @@
 "use strict";
 
 import { UrlBoot } from './core/url_boot.js';
+import { startVersionWatch } from './core/version_watch.js';
 import { SessionStore, makeDbName, normalizeServer } from './data/session_store.js';
 import { Storage, closeDb, setDbName } from './data/storage.js';
 import { setState, appState } from './core/app_state.js';
@@ -60,6 +61,9 @@ export const ringer = new Ringer({ baseUrl: '/assets/sounds', volume: 0.9 });
 // ─────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
+    const baseUrl = new URL('.', window.location.href).href;
+    startVersionWatch({ baseUrl, intervalMs: 2 * 60 * 1000 });
+
     UrlBoot.stashFromUrlAndCleanUrl();
 
     const boot = SessionStore.bootstrap({ urlServer: UrlBoot.getBootServer() });

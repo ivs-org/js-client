@@ -9,6 +9,7 @@ import { renderCallPanel } from './panels/call_panel.js';
 import { renderButtonsPanel } from './panels/buttons_panel.js';
 import { renderSettingsPanel } from './panels/settings_panel.js';
 import { renderModalOverlay } from './modal_overlay.js';
+import { renderUpdateBanner, wireUpdateBanner } from './update_banner.js'
 
 export function initLayout() {
     const root = document.getElementById('appRoot');
@@ -127,6 +128,8 @@ function renderMain(root, state) {
           <div class="app">
             <header class="app-topbar" id="appTopbar"></header>
 
+            <div id="updateBannerHost" class="update-banner-host"></div>
+
             <div class="app-buttons" id="appButtons"></div>
 
             <main class="app-main" id="appMain">
@@ -145,9 +148,13 @@ function renderMain(root, state) {
           </div>
         `;
         root.dataset.mainInit = '1';
+
+        wireUpdateBanner(root);
     }
 
     renderTopbar(state);
+
+    renderUpdateBanner(state);
 
     const buttonsRoot = document.getElementById('appButtons');
     const contactsRoot = document.getElementById('panelContacts');

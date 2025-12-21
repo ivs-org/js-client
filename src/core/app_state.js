@@ -11,6 +11,11 @@ export const appState = {
 
     layoutMode: 'desktop',     // 'desktop' | 'mobile'
 
+    update: {
+        available: false,
+        dismissed: false
+    },
+
     auth: {
         server: '',
         login: '',

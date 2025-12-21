@@ -596,6 +596,44 @@ video {
     color: #777;
 }
 
+/* Update banner */
+
+.update-banner-host.hidden {
+    display: none;
+}
+
+.update-banner-host {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.update-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    background: rgba(15, 23, 42, .92);
+    backdrop-filter: blur(10px);
+}
+
+.update-banner__text {
+    font-size: 13px;
+    color: rgba(255,255,255,.9);
+}
+
+.update-banner__muted {
+    color: rgba(255,255,255,.55);
+}
+
+.update-banner__actions {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
 /*****************************************
  * 6. МОДАЛКА
  *****************************************/
