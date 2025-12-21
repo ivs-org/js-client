@@ -34,7 +34,7 @@ const STORE_SETTINGS = 'settings';
 
 // --- In-memory кэш ---
 const groupsById = new Map();
-const membersById = new Map();
+const contactsById = new Map();
 const confsById = new Map();
 const confIdByTag = new Map();
 const settingsByKey = new Map();
@@ -201,10 +201,10 @@ export const Storage = {
             groupsById.set(g.id, g);
         });
 
-        membersById.clear();
+        contactsById.clear();
         (members || []).forEach(m => {
             if (!m || typeof m.id === 'undefined') return;
-            membersById.set(m.id, m);
+            contactsById.set(m.id, m);
         });
 
         confsById.clear();
@@ -233,14 +233,14 @@ export const Storage = {
         if (!initialized) return [];
         return buildContactsTree({
             groups: Array.from(groupsById.values()),
-            members: Array.from(membersById.values()),
+            members: Array.from(contactsById.values()),
             conferences: Array.from(confsById.values()),
             conferencesRolled: !!this.getSetting('ui.conferencesRolled', false),
         });
     },
 
     getMember(id) {
-        return membersById.get(id) || null;
+        return contactsById.get(id) || null;
     },
 
     getConference(id) {
@@ -303,12 +303,11 @@ export const Storage = {
         const { members, sort_type, show_numbers } = contactList || {};
         const list = Array.isArray(members) ? members : [];
 
-        const prev = new Map(membersById); 
+        const prev = new Map(contactsById); 
 
-        membersById.clear();
         for (const m of list) {
             const old = prev.get(m.id);
-            membersById.set(m.id, {
+            contactsById.set(m.id, {
                 ...m,
                 unreaded_count: old ? (old.unreaded_count || 0) : (m.unreaded_count || 0),
             });
@@ -321,7 +320,7 @@ export const Storage = {
 
         await withStore(STORE_MEMBERS, 'readwrite', s => {
             s.clear();
-            for (const m of membersById.values()) s.put(m);
+            for (const m of contactsById.values()) s.put(m);
         });
 
         notify();
@@ -372,7 +371,7 @@ export const Storage = {
     },
 
     getMemberById(id) {
-        return membersById.get(id) || null;
+        return contactsById.get(id) || null;
     },
 
     getConferenceIdByTag(tag) {
@@ -382,10 +381,10 @@ export const Storage = {
     // --- Точечные обновления ---
 
     async updateMember(id, patch) {
-        if (!membersById.has(id)) return;
-        const cur = membersById.get(id);
+        if (!contactsById.has(id)) return;
+        const cur = contactsById.get(id);
         const upd = { ...cur, ...patch };
-        membersById.set(id, upd);
+        contactsById.set(id, upd);
 
         await withStore(STORE_MEMBERS, 'readwrite', s => {
             s.put(upd);
@@ -408,7 +407,7 @@ export const Storage = {
     },
 
     async incrementMemberUnread(id, delta = 1) {
-        const cur = membersById.get(id);
+        const cur = contactsById.get(id);
         if (!cur) return;
         const next = (cur.unreaded_count || 0) + (delta | 0);
         await this.updateMember(id, { unreaded_count: next });
