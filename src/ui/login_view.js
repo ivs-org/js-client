@@ -217,7 +217,7 @@ export function renderLoginView(root, state) {
         }
     });
 
-    regLink?.addEventListener('click', () => setState({ view: 'register' }));
+    regLink?.addEventListener('click', () => setState({ view: 'register', auth: { ...state.auth, server: serverEl.value } }));
 
     // banner actions
     bootEl?.addEventListener('click', (ev) => {

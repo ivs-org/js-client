@@ -126,10 +126,10 @@ function renderMain(root, state) {
     if (!root.dataset.mainInit) {
         root.innerHTML = `
           <div class="app">
-            <header class="app-topbar" id="appTopbar"></header>
-
             <div id="updateBannerHost" class="update-banner-host"></div>
 
+            <header class="app-topbar" id="appTopbar"></header>
+            
             <div class="app-buttons" id="appButtons"></div>
 
             <main class="app-main" id="appMain">

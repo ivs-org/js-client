@@ -432,6 +432,15 @@ export class ControlWS {
         this._send({ load_messages: payload });
     }
 
+    // UX
+    addMeToConference(tag) {
+        this._send({ conference_update_request: { action: 4, /* add me */ conference: { id: 0, tag: tag, members:[] } } });
+    }
+
+    addMeToGroup(tag) {
+        this._send({ group_update_request: { action: 4, /* add me */ group: { id: 0, tag: tag } } });
+    }
+
     // безопасное отключение (останавливаем автореконнект)
     disconnect(code = 1000, reason = 'client stop') {
         this._closing = true;

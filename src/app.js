@@ -490,6 +490,33 @@ function handleControlAuth(token) {
     ctrl.loadMessages();
 
     subscribeUserToPush();
+
+    /// URL work
+    // Adding to conferences
+    const confs = UrlBoot.getBootRegConferences();
+    if (confs) {
+        UrlBoot.clearBootRegConferences();
+        for (const c of confs) {
+            ctrl.addMeToConference(c);
+        }
+    }
+
+    // Adding to groups
+    const groups = UrlBoot.getBootRegGroups();
+    if (groups) {
+        UrlBoot.clearBootRegGroups();
+        for (const g of groups) {
+            ctrl.addMeToGroup(g);
+        }
+    }
+
+    // Join to conference
+    const bootConf = UrlBoot.getBootConference();
+    if (bootConf != '') {
+        UrlBoot.clearBootConference();
+        ctrl.addMeToConference(bootConf);
+        ctrl.sendConnectToConference(bootConf);
+    }
 }
 
 function handleConnectToConferenceResponse(resp) {
