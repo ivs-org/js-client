@@ -64,6 +64,8 @@ export const ringer = new Ringer({ baseUrl: '/assets/sounds', volume: 0.9 });
 // ─────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
+    const boot = bootstrap();
+
     // UI
     startVersionChecker();
     initResponsiveLayout();
@@ -76,13 +78,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     await initSW();
 
     // Go!
-    await tryLogin();
+    await tryLogin(boot);
 });
 
-async function tryLogin() {
+function bootstrap() {
     UrlBoot.stashFromUrlAndCleanUrl();
     const boot = SessionStore.bootstrap({ urlServer: UrlBoot.getBootServer() });
 
+    setState({
+        auth: {
+            server: boot.session.server || '',
+            login: boot.session.login || '',
+            password: '',
+        },
+    });
+
+    return boot;
+}
+
+async function tryLogin(boot) {    
     if (boot.canAutoLogin) {
         await startLogin(boot.session.server, boot.session.login, boot.session.pass);
     } else if (boot.forceLogin) {
