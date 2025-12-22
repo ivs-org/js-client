@@ -31,7 +31,7 @@ Vanilla JS web-клиент для VideoGrace: мессенджер + конфе
         listen 8080;
         server_name localhost;
 
-        root /path/to/repo;
+        root /path/to/repo; # Укажите правильный путь
         index index.html;
 
         # COOP/COEP/CORP (для SAB/Worklet)
@@ -42,10 +42,12 @@ Vanilla JS web-клиент для VideoGrace: мессенджер + конфе
         location / {
             try_files $uri $uri/ =404;
         }
-
-        # OPTIONS preflight (если используете CORS запросы)
-        if ($request_method = OPTIONS) {
-            return 204;
+        
+        location = /path/to/repo/src/core/build_info.js { # Укажите правильный путь
+            add_header Cache-Control "max-age=0, no-cache, no-store, must-revalidate";
+            add_header Pragma "no-cache";
+            expires off;
+            etag off;
         }
     }
 
