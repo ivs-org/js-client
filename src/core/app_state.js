@@ -30,28 +30,28 @@ export const appState = {
         title: '',
         message: '',
         okText: 'OK',
-        cancelText: 'Отмена',
+        cancelText: 'РћС‚РјРµРЅР°',
         showCancel: false,
         avatarUrl: '',
         avatarLetter: '',
     },
 
-    // Онлайн/оффлайн
-    online: false,             // true = есть активный ControlWS
-    lastSyncAt: null,          // timestamp последней успешной синхронизации контактов
+    // РћРЅР»Р°Р№РЅ/РѕС„С„Р»Р°Р№РЅ
+    online: false,             // true = РµСЃС‚СЊ Р°РєС‚РёРІРЅС‹Р№ ControlWS
+    lastSyncAt: null,          // timestamp РїРѕСЃР»РµРґРЅРµР№ СѓСЃРїРµС€РЅРѕР№ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё РєРѕРЅС‚Р°РєС‚РѕРІ
 
     user: null,
 
-    // Настройки
+    // РќР°СЃС‚СЂРѕР№РєРё
     showSettingsPanel: false,
     settingsSection: 'general', // camera | mic | speakers | connection | account | permissions | general | recording
     topMenuOpen: false,
     settingsRevision: 0,
 
-    // Выбор в UI
-    activeContactId: null,     // id выбранного Member или Conference
+    // Р’С‹Р±РѕСЂ РІ UI
+    activeContactId: null,     // id РІС‹Р±СЂР°РЅРЅРѕРіРѕ Member РёР»Рё Conference
     activeContactType: null,   // 'member' | 'conference' | null
-    activeConferenceTag: null, // tag выбраной в списке контактов конференции
+    activeConferenceTag: null, // tag РІС‹Р±СЂР°РЅРѕР№ РІ СЃРїРёСЃРєРµ РєРѕРЅС‚Р°РєС‚РѕРІ РєРѕРЅС„РµСЂРµРЅС†РёРё
 
     contactsView: 'contacts',  // 'contacts' | 'members'
 

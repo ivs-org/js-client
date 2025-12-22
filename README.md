@@ -52,9 +52,12 @@ Vanilla JS web-клиент для VideoGrace: мессенджер + конфе
     }
 
 ### 2) Открыть в браузере
-http://localhost:8080/
+https://vks.company.org
 
 Для части API требуется secure context. http://localhost обычно подходит.
+
+Допускается размещение не в корне сервера например /vks, если у вас уже есть витрина приложений досточно положить
+js client в отдельную папку.
 
 ## Browser support
 
