@@ -28,8 +28,8 @@ Vanilla JS web-клиент для VideoGrace: мессенджер + конфе
 Пример server block:
 
     server {
-        listen 8080;
-        server_name localhost;
+        listen 443;                   # Необходим HTTPS
+        server_name vks.company.org;  # Укажите правильный домен
 
         root /path/to/repo; # Укажите правильный путь
         index index.html;
