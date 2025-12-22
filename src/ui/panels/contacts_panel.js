@@ -318,12 +318,14 @@ function attachContactsHandlers(root) {
         switch (type) {
             case 'member':
                 Storage.updateMember(id, { unreaded_count: 0 }).catch(() => { });
+
                 setState({
                     activeContactId: id,
                     activeContactType: 'member',
                     activeConferenceTag: null,
                 });
                 maybeOpenChatOnMobile();
+                
                 break;
 
             case 'conference': {

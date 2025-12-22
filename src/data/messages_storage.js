@@ -88,6 +88,10 @@ function computeChatKey(msg) {
     return `dm:${otherId}`;
 }
 
+function computeChatKeyByGuid(guid) {
+
+}
+
 async function loadAllMessagesFromDb() {
     const db = await openDb();
     if (!db) return [];
@@ -129,6 +133,71 @@ async function saveMessageToDb(message) {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
     });
+}
+
+async function saveMessagesToDbBatch(messages) {
+    const db = await openDb();
+    if (!db) return;
+
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_MESSAGES, 'readwrite');
+        const store = tx.objectStore(STORE_MESSAGES);
+
+        for (const m of messages) {
+            try { store.put(m); } catch { }
+        }
+
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+/**
+ * Проставляет статус прочитано (4) локально + в IndexedDB
+ * и возвращает payload для сервера: delivery_messages[{message:{guid,status}}]
+ *
+ * По умолчанию: отмечаем прочитанным только входящие (не свои).
+ */
+async function markChatMessagesRead(chatKey, readStatus = 4) {
+    if (!chatKey) return null;
+
+    const arr = messagesByChatKey.get(chatKey);
+    if (!arr || !arr.length) return null;
+
+    const toSave = [];
+    const ack = []; // [{message:{guid,status}}]
+    let changed = false;
+
+    for (let i = 0; i < arr.length; i++) {
+        const m = arr[i];
+        if (!m?.guid) continue;
+
+        // read receipts обычно только для входящих
+        if (selfId && (m.author_id ?? 0) === selfId) continue;
+
+        const st = Number(m.status ?? 0);
+        if (st >= readStatus) continue;
+
+        const upd = { ...m, status: readStatus };
+        arr[i] = upd;
+        messagesByGuid.set(upd.guid, upd);
+
+        toSave.push(upd);
+        ack.push({ guid: upd.guid, status: readStatus });
+        changed = true;
+    }
+
+    if (!changed) return null;
+
+    try {
+        await saveMessagesToDbBatch(toSave);
+    } catch (e) {
+        console.warn('[MessagesStorage] markChatMessagesRead: batch save failed', e);
+    }
+
+    notify();
+
+    return { delivery_messages: ack };
 }
 
 export function setSelfId(id) {
@@ -195,6 +264,8 @@ export const MessagesStorage = {
         return max; // unixtime или 0
     },
 
+    markChatMessagesRead,
+
     // messages = массив Message, как прилетает в delivery_messages
     async applyDeliveryMessages(messages) {
         if (!Array.isArray(messages) || !messages.length) return;
@@ -207,17 +278,22 @@ export const MessagesStorage = {
 
             const msg = normalizeMessage(src);
             const chatKey = computeChatKey(msg);
-            if (!chatKey) continue;
+            const existing = messagesByGuid.get(msg.guid);
+
+            if (!existing && !chatKey) continue;
 
             msg.chatKey = chatKey;
-
-            const existing = messagesByGuid.get(msg.guid);
+                        
             if (existing) {
+                if (!msg.chatKey) {
+                    msg.chatKey = computeChatKey(existing);
+                    if (!msg.chatKey) continue;
+                }
                 // обновление (например, смена статуса)
                 const merged = { ...existing, ...msg };
                 messagesByGuid.set(msg.guid, merged);
 
-                const arr = messagesByChatKey.get(chatKey);
+                const arr = messagesByChatKey.get(msg.chatKey);
                 if (arr) {
                     const idx = arr.findIndex(m => m.guid === msg.guid);
                     if (idx >= 0) {
@@ -227,7 +303,7 @@ export const MessagesStorage = {
                         sortMessages(arr);
                     }
                 } else {
-                    messagesByChatKey.set(chatKey, [merged]);
+                    messagesByChatKey.set(msg.chatKey, [merged]);
                 }
             } else {
                 // новый месседж

@@ -1093,6 +1093,38 @@ video {
     font-size: 12px;
     opacity: 0.7;
     margin-bottom: 2px;
+    gap: 8px;
+    align-items: center;
+}
+
+.chat-status {
+    margin-left: auto; /* статус уедет вправо в строке meta */
+    font-size: 12px;
+    opacity: 0.7;
+    user-select: none;
+}
+
+.chat-message.me .chat-status {
+    opacity: 0.85;
+}
+
+.chat-status-read {
+    opacity: 1;
+    color: #77DD77;
+}
+
+.double-check {
+    position: relative;
+    display: inline-block;
+    margin-right: 10px; /* Запас места для наложенной галочки */
+}
+
+.double-check::after {
+    content: '✓'; /* Вторая галочка */
+    position: absolute;
+    left: 4px; /* Сдвиг вправо */
+    top: 0;
+    opacity: 0.8; /* Можно сделать одну чуть прозрачнее */
 }
 
 .chat-text {

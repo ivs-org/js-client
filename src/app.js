@@ -107,15 +107,28 @@ async function tryLogin(boot) {
 // Хранилище
 // ─────────────────────────────────────
 
+async function sendReaded() {
+    if (appState.activeContactType === 'member') {
+        const chatKey = appState.activeContactId ? `dm:${appState.activeContactId}` : '';
+        const payload = await MessagesStorage.markChatMessagesRead(chatKey);
+
+        if (payload && ctrl) {
+            ctrl._send(payload);
+        }
+    }
+}
+
 async function initDataLayer(server, login) {
     setDbName(makeDbName(server, login));
 
     await Storage.init();
 
-    Storage.subscribe(() => {
+    Storage.subscribe(async () => {
         setState({
             contactsRevision: (appState.contactsRevision || 0) + 1,
         });
+
+        sendReaded();
 
         const camId = Storage.getSetting('media.cameraDeviceId', '');
         const micId = Storage.getSetting('media.micDeviceId', '');
@@ -280,6 +293,12 @@ function initResponsiveLayout() {
                     showChatPanel: false,
                 });
             }
+        }
+    });
+
+    document.addEventListener('visibilitychange', async () => {
+        if (!document.hidden) {
+            await sendReaded();
         }
     });
 }
@@ -750,7 +769,7 @@ function handleDeviceParams(dp) {
     ctrl.sendCreatedDevice(device_connect);
 }
 
-function handleNewMessage(newMsgs) {
+async function handleNewMessage(newMsgs) {
     if (document.hidden === true) ringer.Ring(RingType.NewMessage);
 
     const m = newMsgs[newMsgs.length - 1];
@@ -773,6 +792,8 @@ function handleNewMessage(newMsgs) {
         body,
         data
     });
+
+    if (document.hidden === false) await sendReaded();
 }
 
 function handleControlError(err) {

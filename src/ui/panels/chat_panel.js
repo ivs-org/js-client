@@ -9,6 +9,7 @@ const CHAT_PAGE_SIZE = 20;
 
 let lastChatKey = null;
 const lastRenderedCountByChatKey = new Map();
+const lastRenderedRevisionByChatKey = new Map();
 
 function getVisibleMessagesForChat(chatKey, allMessages, state) {
     const total = allMessages.length;
@@ -39,6 +40,8 @@ function scrollToBottom(listEl) {
 
 export function renderChatPanel(root, state) {
     if (!root) return;
+
+    const rev = state.chatRevision || 0;
 
     const chatKey = getActiveChatKey(state);
     const selfId = state.user && state.user.id;
@@ -107,7 +110,9 @@ export function renderChatPanel(root, state) {
 
         lastChatKey = chatKey;
         lastRenderedCountByChatKey.set(chatKey, allMessages.length);
+        lastRenderedRevisionByChatKey.set(chatKey, rev);
         return;
+
     }
 
     // 3) Тот же чат — работаем ИНКРЕМЕНТАЛЬНО
@@ -119,9 +124,14 @@ export function renderChatPanel(root, state) {
     }
 
     const prevCount = lastRenderedCountByChatKey.get(chatKey) ?? 0;
+    const lastRev = lastRenderedRevisionByChatKey.get(chatKey) || 0;
 
-    // сообщений не прибавилось — вообще ничего не делаем
+    // сообщений не прибавилось — но статусы могли поменяться
     if (allMessages.length <= prevCount) {
+        if (rev !== lastRev) {
+            syncMessageStatuses(listEl, allMessages, selfId);
+            lastRenderedRevisionByChatKey.set(chatKey, rev);
+        }
         lastRenderedCountByChatKey.set(chatKey, allMessages.length);
         return;
     }
@@ -137,6 +147,15 @@ export function renderChatPanel(root, state) {
     }
 
     lastRenderedCountByChatKey.set(chatKey, allMessages.length);
+
+    if (rev !== lastRev) {
+    syncMessageStatuses(listEl, allMessages, selfId);
+    lastRenderedRevisionByChatKey.set(chatKey, rev);
+}
+
+if (wasBottom) {
+    scrollToBottom(listEl);
+}
 
     // если пользователь был внизу — держим его внизу
     if (wasBottom) {
@@ -202,11 +221,18 @@ function renderMessageRow(msg, selfId) {
         ? 'Вы'
         : (msg.author_name || msg.sender_name || '');
 
+    const statusHtml = isMe ? renderMsgStatus(msg.status) : '';
+
+    const st = Number(msg.status || 0);
+
     return `
-      <div class="chat-message ${isMe ? 'me' : 'other'}">
+      <div class="chat-message ${isMe ? 'me' : 'other'}"
+       data-guid="${escapeHtml(msg.guid || '')}"
+       data-status="${st}">
         <div class="chat-message-meta">
           <span class="chat-author">${escapeHtml(authorName)}</span>
           <span class="chat-time">${timeStr}</span>
+          ${statusHtml}
         </div>
         ${replyBlock}
         <div class="chat-text">
@@ -214,6 +240,85 @@ function renderMessageRow(msg, selfId) {
         </div>
       </div>
     `;
+}
+
+/**
+ * status:
+ * 1 created
+ * 2 sent
+ * 3 delivered
+ * 4 read
+ */
+function renderMsgStatus(status) {
+    const s = Number(status || 0);
+
+    if (!s || s < 1) return '';
+
+    const ui = statusUi(status);
+    if (!ui) return '';
+
+    return `<span class="${ui.cls}" title="${ui.title}">${ui.icon}</span>`;
+}
+
+function statusUi(status) {
+    const s = Number(status || 0);
+    if (!s || s < 1) return null;
+
+    if (s === 1) return { icon: '🕓', title: 'Создано', cls: 'chat-status', read: false };
+    if (s === 2) return { icon: '✓', title: 'Отправлено', cls: 'chat-status', read: false };
+    if (s === 3) return { icon: '✓', title: 'Доставлено', cls: 'chat-status double-check', read: false };
+    return { icon: '✓', title: 'Прочитано', cls: 'chat-status double-check chat-status-read', read: true };
+}
+
+function syncMessageStatuses(listEl, allMessages, selfId) {
+    if (!listEl || !selfId) return;
+
+    const nodes = listEl.querySelectorAll('.chat-message[data-guid]');
+    const byGuid = new Map();
+    for (const n of nodes) byGuid.set(n.dataset.guid, n);
+
+    for (const msg of allMessages) {
+        const guid = String(msg?.guid || '');
+        if (!guid) continue;
+
+        const isMe = (msg.author_id === selfId || msg.sender_id === selfId);
+        if (!isMe) continue;
+
+        const node = byGuid.get(guid);
+        if (!node) continue;
+
+        const nextSt = Number(msg.status || 0);
+        const curSt = Number(node.dataset.status || 0);
+        if (nextSt === curSt) continue;
+
+        node.dataset.status = String(nextSt);
+
+        const ui = statusUi(nextSt);
+        const meta = node.querySelector('.chat-message-meta');
+        if (!meta) continue;
+
+        let stEl = meta.querySelector('.chat-status');
+
+        // если статуса больше нет — убираем
+        if (!ui) {
+            if (stEl) stEl.remove();
+            continue;
+        }
+
+        // если элемента не было — вставим после времени (или в конец меты)
+        if (!stEl) {
+            const timeEl = meta.querySelector('.chat-time');
+            const html = `<span class="${ui.cls}" title="${ui.title}">${ui.icon}</span>`;
+            if (timeEl) timeEl.insertAdjacentHTML('afterend', html);
+            else meta.insertAdjacentHTML('beforeend', html);
+            continue;
+        }
+
+        // иначе — обновим
+        stEl.className = ui.cls;
+        stEl.textContent = ui.icon;
+        stEl.title = ui.title;
+    }
 }
 
 function renderReplyBlock(payload) {
@@ -371,7 +476,6 @@ function sendMessage(state, chatKey, text) {
     // локально в стор
     MessagesStorage.applyDeliveryMessages([msg]);
 
-    // отправка на сервер — тут тебе нужно подставить свою обвязку ControlWS
     try {
         const ctrl = window.ctrl;
         const payload = { delivery_messages: [msg] };
