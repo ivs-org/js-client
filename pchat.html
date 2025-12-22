@@ -1,0 +1,1312 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#f6f8fc" />
+    <title>pchat.tech — семейная связь в своём контуре</title>
+    <meta name="description" content="pchat — семейный мессенджер и звонки в своём контуре: сервер дома у админа или на VPS. Подписка = забота: настройка доступа, обновления и поддержка." />
+
+    <style>
+        :root {
+            --bg: #f6f8fc;
+            --bg2: #ffffff;
+            --card: #ffffff;
+            --text: #0b1220;
+            --muted: #475569;
+            --line: rgba(2,6,23,.10);
+            --accent: #2563eb;
+            --accent2: #10b981;
+            --warn: #f59e0b;
+            --shadow: 0 18px 45px rgba(2,6,23,.10);
+            --r: 18px;
+            --r2: 24px;
+            --max: 1120px;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        html, body {
+            margin: 0;
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+            color: var(--text);
+            background: var(--bg);
+            line-height: 1.45;
+            position: relative;
+        }
+
+            /* Subtle top glow only (prevents random color bands mid-page) */
+            body:before {
+                content: "";
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 720px;
+                background: radial-gradient(900px 460px at 18% 8%, rgba(37,99,235,.12), transparent 62%), radial-gradient(900px 460px at 88% 8%, rgba(16,185,129,.10), transparent 62%), linear-gradient(180deg, rgba(37,99,235,.06) 0%, rgba(246,248,252,0) 70%);
+                pointer-events: none;
+                z-index: -1;
+            }
+
+        a {
+            color: inherit;
+            text-decoration: none
+        }
+
+        .wrap {
+            max-width: var(--max);
+            margin: 0 auto;
+            padding: 0 20px
+        }
+
+        /* Header */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            backdrop-filter: saturate(140%) blur(10px);
+            background: rgba(255,255,255,.82);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 14px 0
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 900;
+            letter-spacing: .2px
+        }
+
+        .logo {
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(37,99,235,.95), rgba(16,185,129,.92));
+            box-shadow: 0 10px 25px rgba(2,6,23,.14);
+            position: relative;
+        }
+
+            .logo:after {
+                content: "";
+                position: absolute;
+                inset: 8px;
+                border-radius: 10px;
+                background: rgba(255,255,255,.42);
+                border: 1px solid rgba(2,6,23,.12);
+            }
+
+        nav ul {
+            list-style: none !important;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap
+        }
+
+        nav li {
+            margin: 0;
+            padding: 0
+        }
+
+        nav a {
+            color: var(--muted);
+            font-weight: 800;
+            font-size: 13.5px;
+            padding: 8px 10px;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            background: transparent;
+        }
+
+            nav a:hover {
+                color: var(--text);
+                background: rgba(2,6,23,.04);
+                border-color: rgba(2,6,23,.08)
+            }
+
+            nav a:focus {
+                outline: 2px solid rgba(37,99,235,.35);
+                outline-offset: 3px
+            }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            align-items: center
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 14px;
+            border: 1px solid var(--line);
+            background: rgba(2,6,23,.03);
+            color: var(--text);
+            font-weight: 800;
+            font-size: 14px;
+            cursor: pointer;
+            transition: transform .12s ease, background .12s ease, border-color .12s ease;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+            .btn:hover {
+                transform: translateY(-1px);
+                border-color: rgba(2,6,23,.14);
+                background: rgba(2,6,23,.045)
+            }
+
+            .btn.primary {
+                border-color: rgba(37,99,235,.28);
+                background: linear-gradient(180deg, rgba(37,99,235,.12), rgba(37,99,235,.06));
+                box-shadow: 0 12px 30px rgba(37,99,235,.10);
+            }
+
+            .btn.green {
+                border-color: rgba(16,185,129,.26);
+                background: linear-gradient(180deg, rgba(16,185,129,.12), rgba(16,185,129,.06));
+                box-shadow: 0 12px 30px rgba(16,185,129,.10);
+            }
+
+            .btn.small {
+                padding: 8px 12px;
+                border-radius: 12px;
+                font-weight: 800
+            }
+
+        .burger {
+            display: none
+        }
+
+        /* Hero */
+        .hero {
+            padding: 64px 0 38px
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 1.15fr .85fr;
+            gap: 22px;
+            align-items: stretch
+        }
+
+        .panel {
+            border: 1px solid var(--line);
+            background: var(--card);
+            border-radius: var(--r2);
+            box-shadow: var(--shadow);
+        }
+
+        .hero-left {
+            padding: 28px
+        }
+
+        .kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(2,6,23,.10);
+            background: var(--card);
+            color: var(--muted);
+            font-weight: 900;
+            font-size: 13px;
+        }
+
+        color:var(--muted);
+        font-weight:900;
+        font-size:13px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent)
+        }
+
+        h1 {
+            margin: 14px 0 12px;
+            font-size: 46px;
+            line-height: 1.06;
+            letter-spacing: -.9px
+        }
+
+        .lead {
+            color: var(--muted);
+            font-size: 18px;
+            margin: 0 0 18px
+        }
+
+        .bullets {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin: 18px 0
+        }
+
+        .bullet {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            padding: 12px 12px;
+            border-radius: 16px;
+            border: 1px solid rgba(2,6,23,.10);
+            background: var(--card);
+        }
+
+        .check {
+            width: 22px;
+            height: 22px;
+            border-radius: 9px;
+            background: rgba(37,99,235,.10);
+            border: 1px solid rgba(37,99,235,.22);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            margin-top: 1px;
+        }
+
+            .check svg {
+                width: 14px;
+                height: 14px;
+                opacity: .95
+            }
+
+        .hero-ctas {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 12px
+        }
+
+        .micro {
+            color: var(--muted);
+            font-size: 12.8px;
+            margin-top: 10px
+        }
+
+        .hero-right {
+            padding: 18px
+        }
+
+        .mini-title {
+            font-weight: 900;
+            margin: 10px 0 6px
+        }
+
+        .stack {
+            display: grid;
+            gap: 12px
+        }
+
+        .tile {
+            border: 1px solid rgba(2,6,23,.10);
+            background: var(--card);
+            border-radius: 18px;
+            padding: 14px;
+        }
+
+            .tile strong {
+                display: block;
+                margin-bottom: 6px
+            }
+
+            .tile p {
+                margin: 0;
+                color: var(--muted);
+                font-size: 13.5px
+            }
+
+        .mode {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px
+        }
+
+        .pill {
+            font-size: 12px;
+            font-weight: 900;
+            border: 1px solid rgba(2,6,23,.10);
+            color: var(--muted);
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(2,6,23,.03);
+        }
+
+            .pill.ok {
+                border-color: rgba(16,185,129,.26);
+                color: rgba(7,94,53,.92);
+                background: rgba(16,185,129,.10)
+            }
+
+            .pill.warn {
+                border-color: rgba(245,158,11,.28);
+                color: rgba(120,62,0,.92);
+                background: rgba(245,158,11,.10)
+            }
+
+        main {
+            max-width: var(--max);
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+            /* Если внутри main уже есть .wrap — убираем двойные отступы */
+            main .wrap {
+                max-width: 100%;
+                padding: 0;
+            }
+
+        /* Sections */
+        section {
+            padding: 34px 0
+        }
+        /* If sections accidentally fall outside .wrap (direct children of main), keep alignment consistent */
+        main > section {
+            padding-left: 20px;
+            padding-right: 20px
+        }
+
+            main > section .section-title,
+            main > section .grid-3,
+            main > section .grid-2,
+            main > section .how,
+            main > section .shots,
+            main > section .pricing,
+            main > section .diag,
+            main > section .faq {
+                max-width: var(--max);
+                margin-left: auto;
+                margin-right: auto
+            }
+        /* Gentle separators so sections don't visually "break" */
+        main section + section {
+            border-top: 1px solid rgba(2,6,23,.05)
+        }
+
+        .section-title {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 28px;
+            letter-spacing: -.3px
+        }
+
+        .sub {
+            margin: 0;
+            color: var(--muted);
+            max-width: 62ch
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3,1fr);
+            gap: 14px
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2,1fr);
+            gap: 14px
+        }
+
+        .card {
+            border: 1px solid var(--line);
+            background: var(--card);
+            border-radius: var(--r);
+            padding: 16px;
+            min-height: 120px;
+        }
+
+            .card h3 {
+                margin: 2px 0 8px;
+                font-size: 16px
+            }
+
+            .card p {
+                margin: 0;
+                color: var(--muted);
+                font-size: 14px
+            }
+
+        /* Screenshots */
+        .shots {
+            display: grid;
+            grid-template-columns: repeat(3,1fr);
+            gap: 14px
+        }
+
+        .shot {
+            border: 1px dashed rgba(2,6,23,.18);
+            background: var(--card);
+            border-radius: 18px;
+            padding: 14px;
+            min-height: 190px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: var(--muted);
+            font-weight: 900;
+        }
+
+            .shot small {
+                display: block;
+                margin-top: 8px;
+                font-weight: 800;
+                color: rgba(71,85,105,.9)
+            }
+
+        .how {
+            display: grid;
+            grid-template-columns: repeat(3,1fr);
+            gap: 14px
+        }
+
+        .step {
+            border: 1px solid var(--line);
+            background: var(--card);
+            border-radius: var(--r);
+            padding: 16px;
+        }
+
+            .step .num {
+                width: 34px;
+                height: 34px;
+                border-radius: 14px;
+                background: rgba(37,99,235,.10);
+                border: 1px solid rgba(37,99,235,.22);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 950;
+                margin-bottom: 10px;
+            }
+
+            .step h3 {
+                margin: 0 0 8px;
+                font-size: 16px
+            }
+
+            .step p {
+                margin: 0;
+                color: var(--muted);
+                font-size: 14px
+            }
+
+        /* Pricing */
+        .pricing {
+            display: grid;
+            grid-template-columns: repeat(3,1fr);
+            gap: 14px
+        }
+
+        .price {
+            border: 1px solid var(--line);
+            background: var(--card);
+            border-radius: 22px;
+            padding: 18px;
+            position: relative;
+            overflow: hidden;
+        }
+
+            .price.featured {
+                border-color: rgba(37,99,235,.22);
+                box-shadow: 0 18px 45px rgba(37,99,235,.08)
+            }
+
+        .badge {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            font-size: 11.5px;
+            font-weight: 950;
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(37,99,235,.22);
+            background: rgba(37,99,235,.10);
+            color: rgba(18,54,120,.92);
+        }
+
+        .price h3 {
+            margin: 0 0 6px;
+            font-size: 18px
+        }
+
+        .price .desc {
+            margin: 0 0 12px;
+            color: var(--muted);
+            font-size: 13.5px
+        }
+
+        .amount {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            margin: 10px 0 10px
+        }
+
+            .amount .big {
+                font-size: 34px;
+                font-weight: 950;
+                letter-spacing: -.6px
+            }
+
+            .amount .unit {
+                color: var(--muted);
+                font-weight: 900
+            }
+
+        .list {
+            margin: 12px 0 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 8px
+        }
+
+            .list li {
+                display: flex;
+                gap: 8px;
+                align-items: flex-start;
+                color: var(--muted);
+                font-size: 13.5px
+            }
+
+                .list li svg {
+                    width: 16px;
+                    height: 16px;
+                    margin-top: 2px;
+                    opacity: .9;
+                    flex: 0 0 auto
+                }
+
+        .fine {
+            margin-top: 12px;
+            color: var(--muted);
+            font-size: 12.8px;
+            border-top: 1px solid rgba(2,6,23,.08);
+            padding-top: 12px
+        }
+
+        /* Diagnostics */
+        .diag {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px
+        }
+
+            .diag .card {
+                min-height: auto
+            }
+
+            .diag form {
+                display: grid;
+                gap: 10px;
+                margin-top: 10px
+            }
+
+        label {
+            font-size: 13px;
+            color: var(--muted);
+            font-weight: 900
+        }
+
+        input[type=text] {
+            padding: 12px 12px;
+            border-radius: 14px;
+            border: 1px solid rgba(2,6,23,.12);
+            background: var(--card);
+            color: var(--text);
+            outline: none;
+        }
+
+        color:var(--text);
+        outline:none;
+        }
+
+        input[type=text]:focus {
+            border-color: rgba(37,99,235,.28)
+        }
+
+        .result {
+            margin-top: 10px;
+            padding: 12px;
+            border-radius: 16px;
+            border: 1px solid rgba(2,6,23,.12);
+            background: var(--card);
+            color: var(--muted);
+            font-size: 13.5px;
+        }
+
+        color:var(--muted);
+        font-size:13.5px;
+        }
+
+        .result strong {
+            color: var(--text)
+        }
+
+        .result.ok {
+            border-color: rgba(16,185,129,.26)
+        }
+
+        .result.warn {
+            border-color: rgba(245,158,11,.28)
+        }
+
+        /* FAQ */
+        .faq {
+            display: grid;
+            gap: 10px
+        }
+
+        details {
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: var(--card);
+            padding: 12px 14px
+        }
+
+        padding:12px 14px
+        }
+
+        summary {
+            cursor: pointer;
+            font-weight: 950
+        }
+
+        details p {
+            margin: 10px 0 0;
+            color: var(--muted);
+            font-size: 14px
+        }
+
+        /* Footer */
+        footer {
+            padding: 28px 0 36px;
+            border-top: 1px solid var(--line);
+            color: var(--muted)
+        }
+
+        .foot {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap
+        }
+
+            .foot a {
+                color: var(--muted);
+                font-weight: 800
+            }
+
+                .foot a:hover {
+                    color: var(--text)
+                }
+
+        /* Responsive */
+        @media (max-width: 980px) {
+            .hero-grid {
+                grid-template-columns: 1fr
+            }
+
+            .grid-3 {
+                grid-template-columns: 1fr
+            }
+
+            .grid-2 {
+                grid-template-columns: 1fr
+            }
+
+            .how {
+                grid-template-columns: 1fr
+            }
+
+            .pricing {
+                grid-template-columns: 1fr
+            }
+
+            .diag {
+                grid-template-columns: 1fr
+            }
+
+            .shots {
+                grid-template-columns: 1fr
+            }
+
+            h1 {
+                font-size: 38px
+            }
+
+            nav ul {
+                display: none !important
+            }
+
+            .burger {
+                display: inline-flex
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="wrap">
+            <div class="nav">
+                <a class="brand" href="#top" aria-label="pchat.tech">
+                    <span class="logo" aria-hidden="true"></span>
+                    <span>pchat.tech</span>
+                </a>
+
+                <nav aria-label="Навигация">
+                    <ul>
+                        <li><a href="#benefits">Польза</a></li>
+                        <li><a href="#what">Как устроено</a></li>
+                        <li><a href="#how">Как работает</a></li>
+                        <li><a href="#screens">Скриншоты</a></li>
+                        <li><a href="#pricing">Тарифы</a></li>
+                        <li><a href="#diag">Диагностика</a></li>
+                        <li><a href="#faq">FAQ</a></li>
+                    </ul>
+                </nav>
+
+                <div class="actions">
+                    <a class="btn small" href="#pricing">Тарифы</a>
+                    <a class="btn small primary" href="#cta">Подключить Home+</a>
+                    <a class="btn small green" href="#vps">Выбрать VPS</a>
+                    <button class="btn small burger" id="burger" aria-label="Меню">☰</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="top">
+        <div class="wrap">
+
+            <!-- HERO -->
+            <section class="hero" aria-label="Первый экран">
+                <div class="hero-grid">
+                    <div class="panel hero-left">
+                        <div class="kicker"><span class="dot" aria-hidden="true"></span>Связь семьи, которую контролируете вы</div>
+                        <h1>pchat — семейный чат и звонки<br />в своём контуре</h1>
+                        <p class="lead">Один человек настраивает (обычно — батя), остальные просто пользуются. Сервер можно поставить дома на старый ПК/мини‑ПК — или взять наш VPS, если дома нет железки или нормальной сети. Подписка нужна не «за приложение», а за заботу: настройка доступа, обновления и поддержка.</p>
+
+                        <div class="bullets" role="list">
+                            <div class="bullet" role="listitem">
+                                <span class="check" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                                </span>
+                                <div>
+                                    <strong>Семейный чат без лишних</strong>
+                                    <div style="color:var(--muted);font-size:13.5px">Только свои. Приглашает админ, а не «случайные люди».</div>
+                                </div>
+                            </div>
+                            <div class="bullet" role="listitem">
+                                <span class="check" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                                </span>
+                                <div>
+                                    <strong>Звонки и видео — когда нужно</strong>
+                                    <div style="color:var(--muted);font-size:13.5px">Чтобы быстро созвониться с родителями или детьми — без лишних сервисов.</div>
+                                </div>
+                            </div>
+                            <div class="bullet" role="listitem">
+                                <span class="check" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                                </span>
+                                <div>
+                                    <strong>Один админ — всем просто</strong>
+                                    <div style="color:var(--muted);font-size:13.5px">Батя управляет доступами и устройствами. Остальным — «нажми и говори».</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="hero-ctas">
+                            <a class="btn" href="#pricing">Попробовать LAN</a>
+                            <a class="btn primary" href="#cta">Подключить Home+</a>
+                            <a class="btn green" href="#vps">Мне нужен VPS</a>
+                        </div>
+                        <div class="micro">Начать можно бесплатно: в домашней сети pchat работает сразу. Если нужно, чтобы работало «из любой точки» и без ручных настроек — подключаете Home+ или выбираете VPS.</div>
+                    </div>
+
+                    <aside class="panel hero-right" aria-label="Коротко о режимах">
+                        <div class="mini-title">Как выбрать вариант установки</div>
+                        <div class="stack">
+                            <div class="tile">
+                                <strong>LAN (бесплатно)</strong>
+                                <p>Дом/дача: связь работает внутри вашей сети. Идеально, чтобы попробовать и подключить семью.</p>
+                                <div class="mode">
+                                    <span class="pill ok">Просто</span>
+                                    <span class="pill">Для старта</span>
+                                    <span class="pill">Без настроек</span>
+                                </div>
+                            </div>
+                            <div class="tile">
+                                <strong>Home (самостоятельно)</strong>
+                                <p>Для тех, кто любит «поковыряться»: можно настроить доступ из интернета своими руками.</p>
+                                <div class="mode">
+                                    <span class="pill warn">Для продвинутых</span>
+                                    <span class="pill">Свои настройки</span>
+                                    <span class="pill">Свой домен (опц.)</span>
+                                </div>
+                            </div>
+                            <div class="tile">
+                                <strong>Home+</strong>
+                                <p>Мы берём заботу: подключение семьи, настройка доступа, обновления, диагностика сети и поддержка.</p>
+                                <div class="mode">
+                                    <span class="pill ok">Под ключ</span>
+                                    <span class="pill ok">Поддержка</span>
+                                    <span class="pill warn">Если дома не получается — VPS</span>
+                                </div>
+                            </div>
+                            <div class="tile">
+                                <strong>VPS</strong>
+                                <p>Если дома нет железки/сети или провайдер ограничивает — выдаём приватный сервер. Самый предсказуемый вариант.</p>
+                                <div class="mode">
+                                    <span class="pill ok">Готово из коробки</span>
+                                    <span class="pill ok">HTTPS</span>
+                                    <span class="pill">Бэкап</span>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+
+            <!-- BENEFITS -->
+            <section id="benefits" aria-label="Польза">
+                <div class="section-title">
+                    <div>
+                        <h2>Зачем pchat семье</h2>
+                        <p class="sub">Сначала — польза. Технические детали оставим тем, кто действительно любит настройки.</p>
+                    </div>
+                </div>
+
+                <div class="grid-3">
+                    <div class="card">
+                        <h3>Только свои</h3>
+                        <p>Семейный чат без «случайных людей». Админ приглашает родственников — и всё.</p>
+                    </div>
+                    <div class="card">
+                        <h3>Созвон за один тап</h3>
+                        <p>Быстро позвонить детям или родителям — без лишних сервисов и «куда нажимать».</p>
+                    </div>
+                    <div class="card">
+                        <h3>Один настраивает — все пользуются</h3>
+                        <p>Обычно это батя. Остальным ничего знать не надо: просто открыть и общаться.</p>
+                    </div>
+                </div>
+
+        </div>
+        </section>
+
+        <!-- WHAT IS -->
+        <section id="what" aria-label="Как устроено">
+            <div class="section-title">
+                <div>
+                    <h2>Как это устроено</h2>
+                    <p class="sub">Суть: сервер принадлежит вам. Он может стоять дома у админа или на нашем VPS — выбираете по удобству.</p>
+                </div>
+            </div>
+
+            <div class="grid-3">
+                <div class="card">
+                    <h3>Где живёт связь</h3>
+                    <p>У вас: на домашнем сервере у «бати» (старый ПК, мини‑ПК) — или на нашем VPS, если дома не хочется/не получается.</p>
+                </div>
+                <div class="card">
+                    <h3>Кто главный</h3>
+                    <p>Один админ семьи: приглашает родственников, управляет доступами и устройствами. Остальным — «просто пользуйся».</p>
+                </div>
+                <div class="card">
+                    <h3>Зачем подписка</h3>
+                    <p>Чтобы не разбираться в настройках: подключение семьи, доступ «снаружи», обновления, диагностика и поддержка. Хотите — делаете сами. Хотите — включаете Home+.</p>
+                </div>
+            </div>
+
+            <div style="height:12px"></div>
+
+            <div class="grid-2">
+                <div class="card" style="min-height:auto">
+                    <h3>Кому подходит</h3>
+                    <p>Семьям с детьми и родителями: когда нужно, чтобы все были на связи, а настройки делал один человек. Особенно если часть семьи «не любит разбираться в приложениях».</p>
+                </div>
+                <div class="card" style="min-height:auto">
+                    <h3>Примеры сценариев</h3>
+                    <p>«Позвонить бабушке в один тап», «семейный чат без лишних людей», «видеозвонок из поездки», «домашний контур связи на даче».</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- WHY NOW -->
+        <section id="why" aria-label="Почему сейчас">
+            <div class="section-title">
+                <div>
+                    <h2>Почему pchat нужен сейчас</h2>
+                    <p class="sub">Публичные сервисы живут по чужим правилам. Семейная связь должна быть вашей инфраструктурой.</p>
+                </div>
+            </div>
+
+            <div class="grid-3">
+                <div class="card">
+                    <h3>Ограничения и блокировки</h3>
+                    <p>Сегодня работает, завтра — «неожиданно нет». Домашний контур устойчивее.</p>
+                </div>
+                <div class="card">
+                    <h3>Навязанные платформы</h3>
+                    <p>Когда всех загоняют в один сервис, выбора нет. pchat возвращает контроль.</p>
+                </div>
+                <div class="card">
+                    <h3>Приватность семьи</h3>
+                    <p>Контакты и разговоры — не то, что хочется отдавать в «облако по умолчанию».</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- HOW -->
+        <section id="how" aria-label="Как работает">
+            <div class="section-title">
+                <div>
+                    <h2>Как это работает</h2>
+                    <p class="sub">Схема простая: сервер у админа, семья подключается. Мы добавляем удобство там, где обычно начинается DevOps.</p>
+                </div>
+            </div>
+
+            <div class="how">
+                <div class="step">
+                    <div class="num">1</div>
+                    <h3>Ставите сервер</h3>
+                    <p>На старый ПК / мини-сервер. Или сразу выбираете VPS, если дома нестабильно.</p>
+                </div>
+                <div class="step">
+                    <div class="num">2</div>
+                    <h3>Добавляете семью</h3>
+                    <p>По приглашениям. Батя — админ: кто в семье, у кого доступ, какие устройства.</p>
+                </div>
+                <div class="step">
+                    <div class="num">3</div>
+                    <h3>Подключаете «заботу»</h3>
+                    <p>Home+ делает «под ключ»: подключение семьи, доступ из интернета (если позволяет провайдер), обновления и поддержка. Не хотите — настраиваете самостоятельно.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- VALUE -->
+        <section id="value" aria-label="Что получаете">
+            <div class="section-title">
+                <div>
+                    <h2>Что вы получаете</h2>
+                    <p class="sub">Ядро — ваш сервер. Подписка — обслуживание доступности, безопасности и админки, чтобы «просто работало».</p>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <h3>Понятная модель контроля</h3>
+                    <p>Один админ (батя), приглашения, роли. Семейный контур без лишней магии.</p>
+                </div>
+                <div class="card">
+                    <h3>DevOps как сервис</h3>
+                    <p>Настройки, обновления, диагностика сети и поддержка — можно самому, но Home+ делает это за вас.</p>
+                </div>
+                <div class="card">
+                    <h3>Нативные клиенты без боли</h3>
+                    <p>Win/Linux клиенты переживут даже «самоподписанные приключения». Web — требует HTTPS.</p>
+                </div>
+                <div class="card">
+                    <h3>Если дома нестабильно — VPS</h3>
+                    <p>Когда нет железки или интернет «капризный», VPS даёт самый предсказуемый результат.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCREENS -->
+        <section id="screens" aria-label="Скриншоты">
+            <div class="section-title">
+                <div>
+                    <h2>Скриншоты интерфейса</h2>
+                    <p class="sub">Здесь можно разместить 3–6 скриншотов: web-клиент, настройки, список семьи, звонок. Блок уже готов — просто замените заглушки на изображения.</p>
+                </div>
+            </div>
+
+            <div class="shots">
+                <div class="shot">Скриншот №1<small>Web: чат / список семьи</small></div>
+                <div class="shot">Скриншот №2<small>Web: звонок / конференция</small></div>
+                <div class="shot">Скриншот №3<small>ЛК: домен / HTTPS / диагностика</small></div>
+            </div>
+
+            <div style="height:10px"></div>
+
+            <div class="shots">
+                <div class="shot">Скриншот №4<small>Мобильный (если будет)</small></div>
+                <div class="shot">Скриншот №5<small>Нативный клиент (Win/Linux)</small></div>
+                <div class="shot">Скриншот №6<small>VPS: статус / мониторинг</small></div>
+            </div>
+        </section>
+
+        <!-- PRICING -->
+        <section id="pricing" aria-label="Тарифы">
+            <div class="section-title">
+                <div>
+                    <h2>Тарифы</h2>
+                    <p class="sub">Без per-user. Платит батя один раз — семья пользуется. Цены поставишь свои, тут — структура и смысл.</p>
+                </div>
+            </div>
+
+            <div class="pricing">
+                <!-- LAN -->
+                <div class="price">
+                    <h3>LAN</h3>
+                    <p class="desc">Бесплатный старт в домашней сети</p>
+                    <div class="amount"><span class="big">0 ₽</span><span class="unit">всегда</span></div>
+                    <ul class="list">
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Семейный чат и звонки внутри вашей сети
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Один админ: приглашения и доступы
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Нативные клиенты (Win/Linux)
+                        </li>
+                    </ul>
+                    <div class="fine">Если нужно, чтобы работало «из любой точки» без ручных настроек — выбирайте Home+ или VPS.</div>
+                    <div style="margin-top:12px"><a class="btn" href="#lead">Начать бесплатно</a></div>
+                </div>
+
+                <!-- HOME+ -->
+                <div class="price featured" id="cta">
+                    <div class="badge">Рекомендуем</div>
+                    <h3>Home+</h3>
+                    <p class="desc">Забота и поддержка для домашнего сервера</p>
+                    <div class="amount"><span class="big">от X ₽</span><span class="unit">/ год за семью</span></div>
+                    <ul class="list">
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Доступ «из любой точки» (когда это возможно у провайдера)
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Личный кабинет: семья, устройства, обновления
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Диагностика сети и поддержка «по-человечески»
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Если дома не получается — поможем перейти на VPS
+                        </li>
+                    </ul>
+                    <div class="fine"><strong>Важно:</strong> если провайдер запрещает входящие подключения (например, CGNAT) — домашний сервер «в интернет» не вывести. Тогда VPS решает проблему без домашних ограничений.</div>
+                    <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap">
+                        <a class="btn primary" href="#diag">Проверить интернет</a>
+                        <a class="btn" href="#lead">Оставить заявку</a>
+                    </div>
+                </div>
+
+                <!-- VPS -->
+                <div class="price" id="vps">
+                    <h3>VPS</h3>
+                    <p class="desc">Готовый приватный сервер для семьи</p>
+                    <div class="amount"><span class="big">от Y ₽</span><span class="unit">/ мес</span></div>
+                    <ul class="list">
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Ваш сервер + сеть (без домашней боли)
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Работает предсказуемо «из любой точки»
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Мониторинг, автообновления, базовый бэкап
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Миграция: дом → VPS (когда надо)
+                        </li>
+                    </ul>
+                    <div class="fine">Это лучший вариант, если дома нет железки/сети или провайдер ограничивает подключения.</div>
+                    <div style="margin-top:12px"><a class="btn green" href="#lead">Хочу VPS</a></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- DIAGNOSTICS -->
+        <section id="diag" aria-label="Диагностика сети">
+            <div class="section-title">
+                <div>
+                    <h2>Быстрая проверка: вам Home+ или VPS?</h2>
+                    <p class="sub">Это демо-блок. Настоящая проверка делается в личном кабинете (агент на сервере проверяет входящий 443 и признаки CGNAT).</p>
+                </div>
+            </div>
+
+            <div class="diag">
+                <div class="card">
+                    <h3>Если у вас белый IP и открыт 443</h3>
+                    <p>Home+ — идеален: домашний сервер + домен/HTTPS/обновления «под ключ».</p>
+                    <div class="result ok"><strong>Результат:</strong> Home+ подходит.</div>
+                </div>
+
+                <div class="card">
+                    <h3>Если у вас CGNAT</h3>
+                    <p>Входящие подключения снаружи запрещены. Не геройствуем: выбираем VPS.</p>
+                    <div class="result warn"><strong>Результат:</strong> лучше VPS.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- LEAD -->
+        <section id="lead" aria-label="Заявка">
+            <div class="section-title">
+                <div>
+                    <h2>Подключиться к раннему доступу</h2>
+                    <p class="sub">Оставьте контакт. Мы пришлём инструкции по LAN и доступ к Home+/VPS, когда откроем регистрацию.</p>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card" style="min-height:auto">
+                    <h3>Контакт</h3>
+                    <p>Телефон или Telegram (как удобнее). Без спама, только по делу.</p>
+                    <form id="leadForm" aria-label="Форма заявки">
+                        <label for="contact">Контакт</label>
+                        <input id="contact" name="contact" type="text" placeholder="@username или +7..." autocomplete="off" />
+                        <div style="display:flex; gap:10px; flex-wrap:wrap">
+                            <button class="btn primary" type="submit">Отправить</button>
+                            <a class="btn" href="#pricing">Вернуться к тарифам</a>
+                        </div>
+                        <div class="micro">Отправка в этом прототипе не подключена (нет бекенда). Можно заменить на вашу форму/CRM/бота.</div>
+                        <div class="result" id="leadResult" style="display:none"></div>
+                    </form>
+                </div>
+
+                <div class="card" style="min-height:auto">
+                    <h3>Что будет дальше</h3>
+                    <ul class="list" style="margin-top:12px">
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Дадим LAN-старт и чеклист для «бати-админа»
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Покажем, как получить домен/HTTPS через Home+
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" /></svg>
+                            Если CGNAT — предложим VPS и миграцию
+                        </li>
+                    </ul>
+                    <div class="fine">pchat — это инфраструктура семьи. А подписка — чтобы эта инфраструктура не требовала вашей работы по вечерам.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ -->
+        <section id="faq" aria-label="FAQ">
+            <div class="section-title">
+                <div>
+                    <h2>FAQ</h2>
+                    <p class="sub">Коротко и честно. Без обещаний «магии», только инженерная реальность.</p>
+                </div>
+            </div>
+
+            <div class="faq">
+                <details>
+                    <summary>Я могу всё настроить сам. Зачем Home+?</summary>
+                    <p>Если вы умеете: домен, HTTPS, продление сертификатов, обновления, диагностика сети — Home+ не обязателен. Он нужен, чтобы не делать это вручную и не превращать семейную связь в бесконечный DevOps.</p>
+                </details>
+                <details>
+                    <summary>Почему Home+ может не подойти из‑за провайдера?</summary>
+                    <p>Если у провайдера CGNAT, входящие подключения снаружи запрещены. В этом случае домашний сервер нельзя сделать доступным «как сайт» без дополнительных туннелей. Мы не делаем «проброс из жопы мира» — для таких кейсов проще VPS.</p>
+                </details>
+                <details>
+                    <summary>Если перестану платить Home+ — pchat отключится?</summary>
+                    <p>Нет. LAN продолжит работать. Отключится сервисная часть: семейный адрес/HTTPS‑обвязка/обновления и поддержка.</p>
+                </details>
+                <details>
+                    <summary>В чём смысл VPS, если идея — «сервер у бати»?</summary>
+                    <p>Смысл — в предсказуемости. Не у всех есть железка и нормальная сеть. VPS — это тот же приватный контур, просто размещённый там, где есть стабильный интернет и входящие подключения.</p>
+                </details>
+            </div>
+        </section>
+
+        </div>
+    </main>
+
+    <footer>
+        <div class="wrap">
+            <div class="foot">
+                <div>© <span id="y"></span> pchat.tech</div>
+                <div style="display:flex; gap:14px; flex-wrap:wrap">
+                    <a href="#">Политика</a>
+                    <a href="#">Условия</a>
+                    <a href="#">Контакты</a>
+                    <a href="#">Документация</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // year
+        document.getElementById('y').textContent = new Date().getFullYear();
+
+        // mobile nav (very light)
+        const burger = document.getElementById('burger');
+        if (burger) {
+            burger.addEventListener('click', () => {
+                alert('Меню: Польза · Как устроено · Как работает · Скриншоты · Тарифы · Диагностика · FAQ (в прототипе скрыто на мобилке)');
+            });
+        }
+
+        // lead form (no backend)
+        const form = document.getElementById('leadForm');
+        const out = document.getElementById('leadResult');
+        form?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const v = (document.getElementById('contact')?.value || '').trim();
+            out.style.display = 'block';
+            if (!v) {
+                out.className = 'result warn';
+                out.innerHTML = '<strong>Нужно указать контакт.</strong> Например: @telegram или +7…';
+                return;
+            }
+            out.className = 'result ok';
+            out.innerHTML = '<strong>Принято.</strong> В этом прототипе заявка не уходит на сервер — подключите свою форму/CRM/бота.';
+        });
+    </script>
+
+</body>
+</html>

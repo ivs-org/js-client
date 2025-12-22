@@ -115,7 +115,7 @@ export class CameraSession {
         } catch (e) {
             // если exact deviceId умер — fallback на default
             if (camId) {
-                console.warn('📷 selected camera failed, fallback to default:', e?.name || e);
+                console.warn('📷 [Cam] selected camera failed, fallback to default:', e?.name || e);
                 delete video.deviceId;
                 this._stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
             } else {
@@ -126,7 +126,7 @@ export class CameraSession {
         this._track = this._stream.getVideoTracks()[0];
         if (!this._track) {
             await this.stop();
-            throw new Error('No video track');
+            throw new Error('📷 [Cam] No video track');
         }
 
         const s = this._track.getSettings?.() ?? {};
@@ -140,7 +140,7 @@ export class CameraSession {
         const first = await this._reader.read();
         if (first.done || !first.value) {
             await this.stop();
-            throw new Error('[Cam] No video frames');
+            throw new Error('📷 [Cam] No video frames');
         }
 
         const firstFrame = first.value;
@@ -199,7 +199,7 @@ export class CameraSession {
 
         if (!this._localRunning) {
             // критично: без локального трека нам нечего отправлять
-            console.warn('[Cam] attachRemote called before local capture; ignoring');
+            console.warn('📷 [Cam] attachRemote called before local capture; ignoring');
             return;
         }
 
@@ -226,12 +226,12 @@ export class CameraSession {
             };
             const sup = await VideoEncoder.isConfigSupported(cfg);
             if (!sup.supported) {
-                console.warn('[Cam] VP8 config not supported, trying anyway', sup);
+                console.warn('📷 [Cam] VP8 config not supported, trying anyway', sup);
             }
 
             this.encoder = new VideoEncoder({
                 output: (chunk, meta) => this._onEncodedFrame(chunk, meta),
-                error: (e) => console.error('[Cam] encoder error', e)
+                error: (e) => console.error('📷 [Cam] encoder error', e)
             });
             this.encoder.configure(cfg);
         }
@@ -264,7 +264,7 @@ export class CameraSession {
         // stop local
         await this._stopLocalCapture();
 
-        console.log('📷 CameraSession stopped');
+        console.log('📷 [Cam] CameraSession stopped');
     }
 
     async _stopLocalCapture() {
@@ -288,7 +288,7 @@ export class CameraSession {
 
     async _connectWS() {
         if (!this.server || !this.token) {
-            throw new Error('[Cam] server/token not set');
+            throw new Error('📷 [Cam] server/token not set');
         }
 
         return new Promise((resolve, reject) => {
@@ -321,7 +321,7 @@ export class CameraSession {
             };
 
             this.ws.onerror = (e) => {
-                console.warn('[Cam] ws error', e);
+                console.warn('📷 [Cam] ws error', e);
             };
 
             this.ws.onclose = () => {
@@ -349,10 +349,10 @@ export class CameraSession {
             try {
                 await this._connectWS();
                 this._reconning = false;
-                console.log('[Cam] reconnected');
+                console.log('📷 [Cam] reconnected');
                 return;
             } catch (e) {
-                console.warn('[Cam] reconnect failed, retrying...', e);
+                console.warn('📷 [Cam] reconnect failed, retrying...', e);
             }
         }
     }
@@ -392,7 +392,7 @@ export class CameraSession {
                     this._wantKeyframe = false;
                 }
             } catch (e) {
-                console.warn('[Cam] pump/encode error', e);
+                console.warn('📷 [Cam] pump/encode error', e);
             } finally {
                 try { encFrame?.close(); } catch { }
                 frame.close();

@@ -30,6 +30,9 @@ import { showMessageNotification } from './ui/notify/browser_notify.js';
 import { parsePayload } from './ui/panels/chat_panel.js';
 import { ScreenWakeLock } from './ui/screen_wake_lock.js';
 
+// ─────────────────────────────────────
+// Static
+// ─────────────────────────────────────
 
 const MOBILE_BREAKPOINT = 900;
 
@@ -61,36 +64,38 @@ export const ringer = new Ringer({ baseUrl: '/assets/sounds', volume: 0.9 });
 // ─────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const baseUrl = new URL('.', window.location.href).href;
-    startVersionWatch({ baseUrl, intervalMs: 2 * 60 * 1000 });
-
-    UrlBoot.stashFromUrlAndCleanUrl();
-
-    const boot = SessionStore.bootstrap({ urlServer: UrlBoot.getBootServer() });
-
-    // прокинем в appState — чтобы login_view показал правильные поля
-    setState({
-        auth: {
-            server: boot.session.server || '',
-            login: boot.session.login || '',
-            password: '', // пароль не светим в UI
-        },
-    });
-
-    await initAudio();
+    // UI
+    startVersionChecker();
     initResponsiveLayout();
     initLayout();
     initButtonsPanelActions();
     await initAuthEvents();
 
+    // Workers
+    await initAudio();
+    await initSW();
+
+    // Go!
+    await tryLogin();
+});
+
+async function tryLogin() {
+    UrlBoot.stashFromUrlAndCleanUrl();
+    const boot = SessionStore.bootstrap({ urlServer: UrlBoot.getBootServer() });
+
     if (boot.canAutoLogin) {
         await startLogin(boot.session.server, boot.session.login, boot.session.pass);
     } else if (boot.forceLogin) {
-        setState({ view: 'login' });
+        setState({
+            auth: {
+                server: boot.session.server || '',
+                login: boot.session.login || '',
+                password: '',
+            },
+            view: 'login'
+        });
     }
-
-    await initSW();
-});
+}
 
 // ─────────────────────────────────────
 // Хранилище
@@ -139,6 +144,14 @@ async function initDataLayer(server, login) {
             chatRevision: (appState.chatRevision || 0) + 1,
         });
     });
+}
+
+// ─────────────────────────────────────
+// Version checker
+// ─────────────────────────────────────
+function startVersionChecker() {
+    const baseUrl = new URL('.', window.location.href).href;
+    startVersionWatch({ baseUrl, intervalMs: 2 * 60 * 1000 });
 }
 
 // ─────────────────────────────────────
