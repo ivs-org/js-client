@@ -91,6 +91,7 @@ function bootstrap() {
             login: boot.session.login || '',
             password: '',
         },
+        view: 'login'
     });
 
     return boot;
@@ -99,15 +100,6 @@ function bootstrap() {
 async function tryLogin(boot) {    
     if (boot.canAutoLogin) {
         await startLogin(boot.session.server, boot.session.login, boot.session.pass);
-    } else if (boot.forceLogin) {
-        setState({
-            auth: {
-                server: boot.session.server || '',
-                login: boot.session.login || '',
-                password: '',
-            },
-            view: 'login'
-        });
     }
 }
 
