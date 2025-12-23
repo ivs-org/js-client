@@ -1128,8 +1128,24 @@ video {
 }
 
 .chat-text {
-    white-space: pre-wrap;
     word-wrap: break-word;
+    color: #e5e7eb;
+}
+
+.chat-text h1,
+.chat-text h2,
+.chat-text h3 {
+    margin-bottom: 4px;
+    color: #eee;
+}
+
+.chat-text ul {
+    margin-top: 0;
+    padding-top: 0;
+}
+
+.chat-text li {
+    margin-bottom: 0;
 }
 
 /* Ввод */

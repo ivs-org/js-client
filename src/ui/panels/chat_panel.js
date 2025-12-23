@@ -3,7 +3,7 @@
 import { Storage } from '../../data/storage.js';
 import { appState, setState } from '../../core/app_state.js';
 import { MessagesStorage } from '../../data/messages_storage.js';
-import { isMobileLayout } from '../panels/buttons_panel.js';
+import { marked } from "../../third-party/marked.esm.js";
 
 const CHAT_PAGE_SIZE = 20;
 
@@ -210,7 +210,7 @@ function renderMessageRow(msg, selfId) {
         (msg.author_id === selfId || msg.sender_id === selfId);
 
     const payload = parsePayload(msg.text);
-    const mainText = payload.message || '';
+    const mainText = marked.parse(escapeHtml(payload.message)) || '';
     const replyBlock = payload.type === 'reply'
         ? renderReplyBlock(payload)
         : '';
@@ -236,7 +236,7 @@ function renderMessageRow(msg, selfId) {
         </div>
         ${replyBlock}
         <div class="chat-text">
-          ${escapeHtml(mainText)}
+          ${mainText}
         </div>
       </div>
     `;
