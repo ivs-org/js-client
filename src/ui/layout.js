@@ -176,9 +176,7 @@ function renderMain(root, state) {
     }
 
     renderContactsPanel(contactsRoot, state);
-    if (!!state.activeCall) {
-        renderCallPanel(callRoot, state);
-    }
+    renderCallPanel(callRoot, state);
     renderChatPanel(chatRoot, state);
 
     updateLocalPreview(state);

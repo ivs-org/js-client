@@ -70,6 +70,15 @@ export function renderTopbar(state) {
 
     let topbarClass = mobile ? 'topbar-mobile' : 'topbar-desktop';
 
+    const inCall = !!state.activeCall;
+    const callType = state.activeCall?.type || null;
+    const activeContactType = state.activeContactType;
+
+    const callHint = inCall
+        ? (callType === 'conference' ? 'Отключиться от конференции' : 'Завершить звонок')
+        : (activeContactType === 'member' ? 'Позвонить' : 'Подключиться к конференции');
+    const callIcon = inCall ? '📴' : '📞';
+
     el.innerHTML = `
       <div class="${topbarClass}">
         ${renderBack(state)}
@@ -90,15 +99,14 @@ export function renderTopbar(state) {
             type="button"
             class="topbar-call"
             id="btnToggleCall"
-            aria-label="Позвонить"
-          >📞</button>
+            aria-label="${callHint}"
+            title="${callHint}"
+          >${callIcon}</button>
           <span class="topbar-sep"></span>
           ${renderTopMenu(state)}
         </div>
       </div>
     `;
-
-    const inCall = !!state.activeCall;
 
     // Кнопка "Назад"
     const backBtn = document.getElementById('topbarBackBtn');

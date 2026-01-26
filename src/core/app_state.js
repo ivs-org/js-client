@@ -60,7 +60,7 @@ export const appState = {
     chatRevision: 0,
     chatWindow: {},
 
-    activeCall: null,          // { tag, status } | null
+    activeCall: null,          // { type, status, tag?, name?, peerId?, peerName?, direction? } | null
 
     showContactsPanel: true,
     showChatPanel: true,

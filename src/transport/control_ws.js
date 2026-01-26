@@ -275,6 +275,26 @@ export class ControlWS {
                 return;
             }
 
+            if (msg.call_request) {
+                this.bus.emit('callRequest', msg.call_request);
+                return;
+            }
+
+            if (msg.call_response) {
+                this.bus.emit('callResponse', msg.call_response);
+                return;
+            }
+
+            if (msg.create_temp_conference) {
+                this.bus.emit('conferenceCreated', msg.create_temp_conference);
+                return;
+            }
+
+            if (msg.send_connect_to_conference) {
+                this.bus.emit('startConnectToConference', msg.send_connect_to_conference);
+                return;
+            }
+
             // Group list
             if (msg.group_list) {
                 Storage.applyGroupList(msg.group_list || []).catch(err =>
@@ -405,6 +425,46 @@ export class ControlWS {
 
     sendConnectToConference(tag) {
         this._send({ connect_to_conference_request: { tag } });
+    }
+
+    sendCallRequest({ name, id = 0, connection_id = 0, type, time_limit = 0 }) {
+        const msg = {
+            call_request: {
+                name: name || '',
+                id: id || 0,
+                connection_id: connection_id || 0,
+                type: type || 0,
+                time_limit
+            }
+        };
+        this._send(msg);
+    }
+
+    sendCallResponse({ id, connection_id, type, name = '', time_limit = 0 }) {
+        const msg = {
+            call_response: {
+                id: id || 0,
+                connection_id: connection_id || 0,
+                name,
+                type: type || 0,
+                time_limit
+            }
+        };
+        this._send(msg);
+    }
+
+    sendCreateTempConference(tag) {
+        this._send({ create_temp_conference: { tag } });
+    }
+
+    sendConnectToConferenceInvite({ tag, connecter_id, connecter_connection_id, flags = 0 }) {
+        const payload = {
+            tag,
+            connecter_id,
+            connecter_connection_id
+        };
+        if (flags) payload.flags = flags;
+        this._send({ send_connect_to_conference: payload });
     }
 
     sendDisconnectFromConference() {

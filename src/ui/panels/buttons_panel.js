@@ -9,6 +9,8 @@ export function renderButtonsPanel(root, state) {
     if (!root) return;
 
     const inCall = !!state.activeCall;
+    const callType = state.activeCall?.type || null;
+    const activeContactType = state.activeContactType;
     const camOn = !!state.camEnabled;
     const demoOn = !!state.demoEnabled;
     const micOn = !!state.micEnabled;
@@ -17,8 +19,8 @@ export function renderButtonsPanel(root, state) {
     const showChat = !!state.showChatPanel;
 
     const callHint = inCall
-        ? 'Отключиться от конференции'
-        : 'Подключиться к конференции';
+        ? (callType === 'conference' ? 'Отключиться от конференции' : 'Завершить звонок')
+        : (activeContactType === 'member' ? 'Позвонить' : 'Подключиться к конференции');
     const camHint = camOn ? 'Выключить камеру' : 'Включить камеру';
     const demoHint = demoOn ? 'Выключить показ экрана' : 'Включить показ экрана';
     const micHint = micOn ? 'Выключить микрофон' : 'Включить микрофон';

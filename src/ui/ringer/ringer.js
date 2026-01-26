@@ -136,6 +136,10 @@ export class Ringer {
         }
     }
 
+    Started() {
+        return !!(this._currentEl || this._currentSrc || this._repeatTimer);
+    }
+
     // ---------------- private ----------------
 
     _url(file) {

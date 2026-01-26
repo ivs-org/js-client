@@ -16,7 +16,7 @@ import { MemberList } from './data/member_list.js';
 import { MessagesStorage, setSelfId as messagesSetSelfId } from './data/messages_storage.js';
 import { initLayout } from './ui/layout.js';
 import { registerUserViaHttp, interpretRegistrationResult } from './transport/registration_http.js';
-import { showOk, showError } from './ui/modal.js';
+import { showOk, showError, confirmDialog, _resolveModal } from './ui/modal.js';
 import { ControlWS } from './transport/control_ws.js';
 import { MediaChannel } from './media/media_channel.js';
 import { AudioShared } from './media/audio/audio_shared.js';
@@ -52,12 +52,45 @@ function log(s) {
     console.debug(s);
 }
 
+function randomTag(len = 10) {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let out = '';
+    for (let i = 0; i < len; i++) {
+        out += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return out;
+}
+
 let ctrl = null;
 let ctrlEventUnsubscribers = [];
 
 const mediaSessions = new Map();
 
 export const ringer = new Ringer({ baseUrl: '/assets/sounds', volume: 0.9 });
+
+const CALL_REQUEST_TYPE = Object.freeze({
+    Undefined: 0,
+    Invocation: 1,
+    Cancel: 2,
+});
+
+const CALL_RESPONSE_TYPE = Object.freeze({
+    Undefined: 0,
+    AutoCall: 1,
+    NotConnected: 2,
+    Accept: 3,
+    Refuse: 4,
+    Busy: 5,
+    Timeout: 6,
+});
+
+const SEND_CONNECT_FLAGS = Object.freeze({
+    InviteCall: 0,
+    AddMember: 1,
+});
+
+let incomingCallToken = 0;
+let pendingInvite = null;
 
 // ─────────────────────────────────────
 // Точка входа
@@ -316,15 +349,101 @@ function connectToConference() {
         return;
     }
 
-    AudioShared.kickFromGesture();
-    ScreenWakeLock.enable();
-
     const conf = Storage.getConference(activeContactId);
     if (!conf) return;
 
     const tag = conf.tag || activeConferenceTag;
+    connectToConferenceByTag(tag, { type: 'conference', name: conf.name || tag });
+}
+
+function connectToConferenceByTag(tag, opts = {}) {
+    if (!ctrl || !tag) return;
+
+    checkWebCodecs();
+    AudioShared.kickFromGesture();
+    ScreenWakeLock.enable();
+
+    if (opts.type === 'p2p') {
+        setState({
+            activeCall: {
+                ...(appState.activeCall || {}),
+                type: 'p2p',
+                status: 'connecting',
+                tag
+            }
+        });
+    }
 
     ctrl.sendConnectToConference(tag);
+}
+
+function getCallTargetName(member) {
+    return member?.number || member?.name || member?.login || (member?.id ? String(member.id) : '');
+}
+
+function startOutgoingCall() {
+    if (!ctrl) return;
+
+    const { activeContactType, activeContactId } = appState;
+    if (activeContactType !== 'member' || !activeContactId) return;
+
+    const member = Storage.getMember(activeContactId);
+    if (!member) return;
+
+    const targetName = getCallTargetName(member);
+    if (!targetName) return;
+
+    setState({
+        activeCall: {
+            type: 'p2p',
+            status: 'dialing',
+            direction: 'outgoing',
+            peerId: member.id,
+            peerName: member.name || member.login || targetName,
+            callName: targetName,
+        }
+    });
+
+    ringer.Ring(RingType.CallOut);
+    ctrl.sendCallRequest({
+        name: targetName,
+        id: member.id || 0,
+        connection_id: 0,
+        type: CALL_REQUEST_TYPE.Invocation
+    });
+}
+
+function endP2PCall(reason = '') {
+    if (!ctrl) return;
+
+    const call = appState.activeCall;
+    if (!call || call.type !== 'p2p') return;
+
+    if (call.status === 'connected' || ctrl.getCurrentConference()) {
+        disconnectFromConference();
+        return;
+    }
+
+    if (call.direction === 'outgoing' && call.callName) {
+        ctrl.sendCallRequest({
+            name: call.callName,
+            id: call.peerId || 0,
+            connection_id: call.peerConnectionId || 0,
+            type: CALL_REQUEST_TYPE.Cancel
+        });
+    } else if (call.direction === 'incoming' && call.peerId && call.peerConnectionId) {
+        ctrl.sendCallResponse({
+            id: call.peerId,
+            connection_id: call.peerConnectionId,
+            type: CALL_RESPONSE_TYPE.Refuse,
+            name: call.callName || '',
+        });
+    }
+
+    if (ringer.Started()) ringer.Stop();
+    if (reason) ringer.Ring(RingType.Hangup);
+
+    setState({ activeCall: null });
 }
 
 function initButtonsPanelActions() {
@@ -337,13 +456,25 @@ function initButtonsPanelActions() {
         if (!btn) return;
 
         switch (btn.id) {
+            case 'btnCancelOutgoingCall':
+                if (!ctrl || !appState.online) return;
+                endP2PCall('manual');
+                break;
             case 'btnToggleCall':
                 if (!ctrl || !appState.online) return;
-                if (!ctrl.getCurrentConference()) {
-                    connectToConference();
-                } else {
-                    // Отключиться
-                    disconnectFromConference();
+                if (appState.activeContactType === 'conference') {
+                    if (!ctrl.getCurrentConference()) {
+                        connectToConference();
+                    } else {
+                        // Отключиться
+                        disconnectFromConference();
+                    }
+                } else if (appState.activeContactType === 'member') {
+                    if (appState.activeCall?.type === 'p2p') {
+                        endP2PCall('manual');
+                    } else {
+                        startOutgoingCall();
+                    }
                 }
                 break;
 
@@ -491,6 +622,10 @@ function wireControlEvents() {
         ctrl.bus.on('connectToConferenceResponse', handleConnectToConferenceResponse),
         ctrl.bus.on('disconnectFromConference', handleDisconnectFromConference),
         ctrl.bus.on('ping', () => { }),
+        ctrl.bus.on('callRequest', handleCallRequest),
+        ctrl.bus.on('callResponse', handleCallResponse),
+        ctrl.bus.on('conferenceCreated', handleConferenceCreated),
+        ctrl.bus.on('startConnectToConference', handleStartConnectToConference),
         ctrl.bus.on('deviceConnected', handleDeviceConnected),
         ctrl.bus.on('deviceDisconnect', handleDeviceDisconnect),
         ctrl.bus.on('deviceParams', handleDeviceParams),
@@ -571,13 +706,22 @@ function handleConnectToConferenceResponse(resp) {
 
     const isMobile = appState.layoutMode === 'mobile';
     
+    const existingCall = appState.activeCall;
+    const nextCall = {
+        type: existingCall?.type || 'conference',
+        tag: resp.tag,
+        name: resp.name,
+        status: 'connected',
+        direction: existingCall?.direction,
+        peerId: existingCall?.peerId,
+        peerName: existingCall?.peerName,
+        peerConnectionId: existingCall?.peerConnectionId,
+        callName: existingCall?.callName,
+    };
+
     setState({
         contactsView: 'members',
-        activeCall: {
-            tag: resp.tag,
-            name: resp.name,
-            status: 'connected'
-        },
+        activeCall: nextCall,
         showContactsPanel: !isMobile && appState.showContactsPanel,
         showChatPanel: !isMobile && appState.showChatPanel,
     });
@@ -593,6 +737,195 @@ function handleConnectToConferenceResponse(resp) {
 function handleDisconnectFromConference() {
     log('🛠️ disconnecting from conference received');
     disconnectFromConference();
+}
+
+function handleCallRequest(req) {
+    if (!ctrl || !req) return;
+
+    const reqType = Number(req.type || 0);
+    const peerId = Number(req.id || 0);
+    const peerConnectionId = Number(req.connection_id || 0);
+    const peerName = req.name || (peerId ? `Контакт #${peerId}` : 'Неизвестный контакт');
+    const callName = req.name || '';
+
+    if (reqType === CALL_REQUEST_TYPE.Cancel) {
+        if (appState.activeCall?.type === 'p2p' && appState.activeCall?.direction === 'incoming') {
+            _resolveModal(false);
+            if (ringer.Started()) ringer.Stop();
+            setState({ activeCall: null });
+        }
+        return;
+    }
+
+    if (reqType !== CALL_REQUEST_TYPE.Invocation) return;
+
+    if (appState.activeCall || ctrl.getCurrentConference()) {
+        ctrl.sendCallResponse({
+            id: peerId,
+            connection_id: peerConnectionId,
+            type: CALL_RESPONSE_TYPE.Busy,
+            name: callName,
+        });
+        return;
+    }
+
+    incomingCallToken += 1;
+    const token = incomingCallToken;
+
+    setState({
+        activeContactType: 'member',
+        activeContactId: peerId || null,
+        activeConferenceTag: null,
+        activeCall: {
+            type: 'p2p',
+            status: 'ringing',
+            direction: 'incoming',
+            peerId,
+            peerName,
+            peerConnectionId,
+            callName,
+            timeLimit: req.time_limit || 0,
+        }
+    });
+
+    ringer.Ring(RingType.CallIn);
+
+    confirmDialog({
+        title: 'Входящий звонок',
+        message: `Звонок от ${peerName}. Принять?`,
+        okText: 'Принять',
+        cancelText: 'Отклонить',
+    }).then((accepted) => {
+        if (token !== incomingCallToken) return;
+
+        if (ringer.Started()) ringer.Stop();
+
+        if (accepted) {
+            ctrl.sendCallResponse({
+                id: peerId,
+                connection_id: peerConnectionId,
+                type: CALL_RESPONSE_TYPE.Accept,
+                name: callName,
+            });
+            setState({
+                activeCall: {
+                    ...(appState.activeCall || {}),
+                    status: 'connecting',
+                }
+            });
+        } else {
+            ctrl.sendCallResponse({
+                id: peerId,
+                connection_id: peerConnectionId,
+                type: CALL_RESPONSE_TYPE.Refuse,
+                name: callName,
+            });
+            setState({ activeCall: null });
+        }
+    });
+}
+
+function handleCallResponse(resp) {
+    if (!ctrl || !resp) return;
+
+    const respType = Number(resp.type || 0);
+    const peerId = Number(resp.id || 0);
+    const peerConnectionId = Number(resp.connection_id || 0);
+
+    switch (respType) {
+        case CALL_RESPONSE_TYPE.Accept: {
+            if (ringer.Started()) ringer.Stop();
+
+            const existingConf = ctrl.getCurrentConference();
+            if (!existingConf) {
+                const tag = randomTag(10);
+                pendingInvite = { peerId, peerConnectionId, tag };
+                ctrl.sendCreateTempConference(tag);
+            } else {
+                ctrl.sendConnectToConferenceInvite({
+                    tag: existingConf.tag,
+                    connecter_id: peerId,
+                    connecter_connection_id: peerConnectionId,
+                    flags: SEND_CONNECT_FLAGS.InviteCall
+                });
+            }
+
+            setState({
+                activeCall: {
+                    ...(appState.activeCall || {}),
+                    type: 'p2p',
+                    status: 'connecting',
+                    peerId,
+                    peerConnectionId,
+                }
+            });
+            break;
+        }
+        case CALL_RESPONSE_TYPE.Refuse:
+            if (ringer.Started()) ringer.Stop();
+            setState({ activeCall: null });
+            showOk('Звонок', 'Абонент отклонил звонок');
+            break;
+        case CALL_RESPONSE_TYPE.Busy:
+            if (ringer.Started()) ringer.Stop();
+            setState({ activeCall: null });
+            showOk('Звонок', 'Абонент занят');
+            break;
+        case CALL_RESPONSE_TYPE.Timeout:
+            if (ringer.Started()) ringer.Stop();
+            setState({ activeCall: null });
+            showOk('Звонок', 'Абонент не ответил');
+            break;
+        case CALL_RESPONSE_TYPE.NotConnected:
+            if (ringer.Started()) ringer.Stop();
+            setState({ activeCall: null });
+            showOk('Звонок', 'Абонент не в сети');
+            break;
+        default:
+            break;
+    }
+}
+
+function handleConferenceCreated(payload) {
+    if (!payload?.tag || !pendingInvite) return;
+
+    const { peerId, peerConnectionId, tag } = pendingInvite;
+    if (payload.tag !== tag) return;
+
+    ctrl.sendConnectToConferenceInvite({
+        tag,
+        connecter_id: peerId,
+        connecter_connection_id: peerConnectionId,
+        flags: SEND_CONNECT_FLAGS.InviteCall
+    });
+
+    pendingInvite = null;
+
+    connectToConferenceByTag(tag, { type: 'p2p' });
+}
+
+function handleStartConnectToConference(payload) {
+    if (!payload?.tag || ctrl.getCurrentConference()) return;
+
+    const flags = Number(payload.flags || 0);
+
+    if (flags === SEND_CONNECT_FLAGS.InviteCall) {
+        connectToConferenceByTag(payload.tag, { type: 'p2p' });
+        return;
+    }
+
+    if (flags === SEND_CONNECT_FLAGS.AddMember) {
+        confirmDialog({
+            title: 'Приглашение в конференцию',
+            message: `Подключиться к конференции ${payload.tag}?`,
+            okText: 'Подключиться',
+            cancelText: 'Позже',
+        }).then((accepted) => {
+            if (accepted) {
+                connectToConferenceByTag(payload.tag, { type: 'conference' });
+            }
+        });
+    }
 }
 
 function handleDeviceConnected(device) {
@@ -806,6 +1139,9 @@ function handleControlError(err) {
 
 function handleControlClose() {
     log('🛠️ Control connection ends');
+
+    pendingInvite = null;
+    incomingCallToken += 1;
 
     if (cam) cam.stop();
     cam = null;
@@ -1033,6 +1369,8 @@ function disconnectFromConference() {
     if (!appState.activeCall) return;
 
     ScreenWakeLock.disable();
+
+    pendingInvite = null;
 
     stopCam();
     stopMic();
