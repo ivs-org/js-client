@@ -99,6 +99,12 @@ let pendingInvite = null;
 document.addEventListener('DOMContentLoaded', async () => {
     const boot = bootstrap();
 
+    // Firefox ESR: проверка MediaStreamTrackProcessor для информирования о режиме работы
+    if (!('MediaStreamTrackProcessor' in window)) {
+        console.info('ℹ️ MediaStreamTrackProcessor недоступен, используется совместимый режим (canvas + AudioWorklet)');
+        console.info('   Это может повлиять на производительность кодирования видео.');
+    }
+
     // UI
     startVersionChecker();
     initResponsiveLayout();
@@ -213,10 +219,8 @@ function startVersionChecker() {
 async function initAudio() {
     const audioCtx = AudioShared.ensureContext();
     await AudioShared.ensureWorklet();
-    
-    AudioShared.setOutputDevice?.(Storage.getSetting('media.speakerDeviceId', ''));
 
-    checkWebCodecs();
+    AudioShared.setOutputDevice?.(Storage.getSetting('media.speakerDeviceId', ''));
 
     console.log('🎧 Initializing audio playback...');
 
@@ -358,6 +362,9 @@ function connectToConference() {
 
 function connectToConferenceByTag(tag, opts = {}) {
     if (!ctrl || !tag) return;
+
+    // Firefox ESR: закрываем Settings Panel для освобождения треков камеры/микрофона
+    setState({ showSettingsPanel: false });
 
     checkWebCodecs();
     AudioShared.kickFromGesture();
@@ -595,6 +602,13 @@ function checkWebCodecs() {
         showError('WebCodecs недоступны. Используйте HTTPS или localhost.');
         return false;
     }
+    
+    // Firefox ESR: MediaStreamTrackProcessor может быть недоступен — используем canvas/audio worklet
+    if (!('MediaStreamTrackProcessor' in window)) {
+        console.warn('⚠️ MediaStreamTrackProcessor недоступен, используется совместимый режим (canvas + AudioWorklet)');
+        // Не показываем ошибку — теперь это работает через альтернативный API
+    }
+    
     const sabAvailable = typeof SharedArrayBuffer !== 'undefined' && crossOriginIsolated;
 
     if (!sabAvailable) {
@@ -1215,11 +1229,18 @@ async function startMic() {
     if (!ctrl) return;
 
     try {
-        if (!mic) {
-            mic = new MicSession();
-            mic.bus.on('speak_started', () => ctrl._send({ microphone_active: { active_type: 2, device_id: mic.deviceId, client_id: ctrl.client_id } }));
-            mic.bus.on('speak_ended', () => ctrl._send({ microphone_active: { active_type: 1, device_id: mic.deviceId, client_id: ctrl.client_id } }));
+        // Firefox ESR: если сессия уже существует, останавливаем её перед новой попыткой
+        if (mic) {
+            try { await mic.stop(); } catch { }
+            mic = null;
         }
+
+        // Firefox ESR: небольшая задержка для освобождения треков после Settings Panel
+        await new Promise(r => setTimeout(r, 100));
+
+        mic = new MicSession();
+        mic.bus.on('speak_started', () => ctrl._send({ microphone_active: { active_type: 2, device_id: mic.deviceId, client_id: ctrl.client_id } }));
+        mic.bus.on('speak_ended', () => ctrl._send({ microphone_active: { active_type: 1, device_id: mic.deviceId, client_id: ctrl.client_id } }));
 
         await mic.startLocalCapture();
         setState({ micEnabled: true });
@@ -1268,9 +1289,16 @@ async function startCam() {
     if (!ctrl) return;
 
     try {
-        if (!cam) {
-            cam = new CameraSession();
+        // Firefox ESR: если сессия уже существует, останавливаем её перед новой попыткой
+        if (cam) {
+            try { await cam.stop(); } catch { }
+            cam = null;
         }
+
+        // Firefox ESR: небольшая задержка для освобождения треков после Settings Panel
+        await new Promise(r => setTimeout(r, 100));
+
+        cam = new CameraSession();
 
         const { width, height } = await cam.startLocalCapture();
         const resolution = getResolution(width, height);

@@ -44,6 +44,9 @@ async function stopCamPreview() {
     }
 
     camPrev.stream = null;
+    
+    // Firefox ESR: небольшая задержка для полного освобождения треков
+    await new Promise(r => setTimeout(r, 50));
 }
 
 async function startCamPreview(deviceId) {
@@ -59,11 +62,11 @@ async function startCamPreview(deviceId) {
         width: { ideal: 640 },
         height: { ideal: 360 },
         frameRate: { ideal: 15 },
-        resizeMode: 'crop-and-scale',
+        // Firefox ESR: убираем resizeMode для совместимости
     };
 
     if (camPrev.deviceId) video.deviceId = { exact: camPrev.deviceId };
-    // ВАЖНО: если deviceId пустой — ничего не добавляем (default камера)
+    // Firefox ESR: более мягкий запрос без resizeMode
 
     let stream;
     try {
