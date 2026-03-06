@@ -598,8 +598,34 @@ async function initAuthEvents() {
  * ------------------------------------------------------------------ */
 
 function checkWebCodecs() {
-    if (!('VideoDecoder' in window) || !('AudioDecoder' in window)) {
-        showError('WebCodecs недоступны. Используйте HTTPS или localhost.');
+    const hasVideoDecoder = 'VideoDecoder' in window;
+    const hasAudioDecoder = 'AudioDecoder' in window;
+    const hasVideoEncoder = 'VideoEncoder' in window;
+    const hasAudioEncoder = 'AudioEncoder' in window;
+    
+    console.log('🔍 WebCodecs проверка:', {
+        VideoDecoder: hasVideoDecoder,
+        AudioDecoder: hasAudioDecoder,
+        VideoEncoder: hasVideoEncoder,
+        AudioEncoder: hasAudioEncoder,
+        SecureContext: window.isSecureContext,
+        Protocol: location.protocol,
+        Hostname: location.hostname,
+        UserAgent: navigator.userAgent
+    });
+
+    if (!hasVideoDecoder || !hasAudioDecoder) {
+        const msg = 'WebCodecs недоступен в этом браузере.\n\n' +
+                    'Возможные причины:\n' +
+                    '• Требуется HTTPS (не http://)\n' +
+                    '• Браузер не поддерживает WebCodecs\n' +
+                    '• Устаревшая версия браузера\n\n' +
+                    'Попробуйте:\n' +
+                    '1. Открыть через HTTPS\n' +
+                    '2. Обновить браузер\n' +
+                    '3. Использовать Chrome/Edge';
+        showError(msg);
+        console.error('❌ WebCodecs недоступен:', { hasVideoDecoder, hasAudioDecoder });
         return false;
     }
     
@@ -612,8 +638,8 @@ function checkWebCodecs() {
     const sabAvailable = typeof SharedArrayBuffer !== 'undefined' && crossOriginIsolated;
 
     if (!sabAvailable) {
-        showError('SharedArrayBuffer не доступен так как сервер не настроен на CORS. Воспроизведение звука невозможно.');
-        return false;
+        console.warn('⚠️ SharedArrayBuffer недоступен (требуется для оптимальной работы)');
+        // Не блокируем работу, просто предупреждаем
     }
     return true;
 }
