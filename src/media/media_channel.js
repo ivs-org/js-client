@@ -96,9 +96,10 @@ export class MediaChannel {
         setAudioDebugStatus(`SharedArrayBuffer: ${sabAvailable ? '✓' : '✗'}`);
         
         if (!sabAvailable) {
+            setAudioDebugStatus(`⚠️ SharedArrayBuffer недоступен, fallback...`);
             console.warn('⚠️ SharedArrayBuffer недоступен, используем запасной вариант (AudioBuffer)');
             await this._initAudioFallback();
-            setAudioDebugStatus(`🎧 Аудио: fallback режим`);
+            setAudioDebugStatus(`🎧 Аудио: fallback режим (ScriptProcessor)`);
             return;
         }
 
@@ -137,35 +138,42 @@ export class MediaChannel {
         this.ring = { idx, dataViews, capacity, channels };
 
         console.log(`🎧 Audio channel initialized`);
-        setAudioDebugStatus(`🎧 Аудио готово`);
+        setAudioDebugStatus(`🎧 Аудио готово (AudioWorklet)`);
     }
 
     /**
      * Запасной вариант для браузеров без SharedArrayBuffer (Telegram WebView, etc.)
-     * Использует AudioBufferSourceNode вместо AudioWorklet
+     * Использует ScriptProcessorNode вместо AudioWorklet
      */
     async _initAudioFallback() {
         const channels = 2;
         const capacity = 48000; // 1 сек/канал
-        
+
+        setAudioDebugStatus(`🔧 Fallback: создание буфера...`);
+
         // Создаём AudioBuffer для буферизации
         this._audioBuffer = this.audioCtx.createBuffer(channels, capacity, this.audioCtx.sampleRate);
         this._writeIndex = 0;
         this._readIndex = 0;
-        
+
+        setAudioDebugStatus(`🔧 Fallback: создание ScriptProcessor...`);
+
         // Создаём GainNode для управления громкостью
         this.gainNode = this.audioCtx.createGain();
         this.gainNode.gain.value = 1.0;
         this.gainNode.connect(this.audioCtx.destination);
-        
-        // Создаём ScriptProcessorNode для записи данных (замена AudioWorklet)
+
+        // Создаём ScriptProcessorNode (замена AudioWorklet)
+        // bufferSize: 4096, входы: 0, выходы: 2 (стерео)
         this._scriptProcessor = this.audioCtx.createScriptProcessor(4096, 0, channels);
         this._scriptProcessor.connect(this.gainNode);
-        
+
+        setAudioDebugStatus(`🔧 Fallback: настройка onaudioprocess...`);
+
         this._scriptProcessor.onaudioprocess = (e) => {
             const outputL = e.outputBuffer.getChannelData(0);
             const outputR = e.outputBuffer.getChannelData(1);
-            
+
             for (let i = 0; i < outputL.length; i++) {
                 if (this._readIndex >= this._writeIndex) {
                     // Буфер пуст — тишина
@@ -178,13 +186,14 @@ export class MediaChannel {
                 }
             }
         };
-        
+
         this.ring = {
             write: () => this._writeIndex,
             data: this._audioBuffer
         };
-        
+
         console.log(`🎧 Audio channel initialized (fallback mode)`);
+        setAudioDebugStatus(`✅ Fallback готов (ScriptProcessor)`);
     }
 
     start(onAttached) {
