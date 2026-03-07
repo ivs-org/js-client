@@ -1,37 +1,53 @@
 /**
- * ui/dashboard.js - Бортовая панель (отладочная информация)
+ * ui/dashboard.js - Бортовая панель (приборная панель)
  *
  * Author: Anton Golovkov, golovkov@videograce.com
  * Copyright (C), Infinity Video Soft LLC, 2025
  */
 
-import { appState, setState, clearDashboardLogs, toggleDashboard } from '../core/app_state.js';
+import { appState, subscribe, clearDashboardLogs, toggleDashboard } from '../core/app_state.js';
+
+let dashboardEl = null;
+let metricsEl = null;
+let updateInterval = null;
 
 export function renderDashboard(state) {
-    const dashboardEl = document.getElementById('dashboardPanel');
-    
+    // Создаём или удаляем панель
     if (!state.showDashboard) {
         if (dashboardEl) {
             dashboardEl.remove();
+            dashboardEl = null;
+            metricsEl = null;
+        }
+        if (updateInterval) {
+            clearInterval(updateInterval);
+            updateInterval = null;
         }
         return;
     }
     
+    // Создаём панель если ещё нет
     if (!dashboardEl) {
         createDashboardElement();
+        startAutoUpdate();
     }
     
-    updateDashboardContent();
+    // Обновляем контент
+    updateDashboardContent(state);
+}
+
+export function initDashboard() {
+    // Пустая функция для совместимости
 }
 
 function createDashboardElement() {
-    const dashboard = document.createElement('div');
-    dashboard.id = 'dashboardPanel';
-    dashboard.style.cssText = `
+    dashboardEl = document.createElement('div');
+    dashboardEl.id = 'dashboardPanel';
+    dashboardEl.style.cssText = `
         position: fixed;
         bottom: 10px;
         left: 10px;
-        width: 500px;
+        width: 600px;
         max-height: 400px;
         background: rgba(0, 0, 0, 0.9);
         border: 1px solid #333;
@@ -54,6 +70,7 @@ function createDashboardElement() {
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
         border-radius: 10px 10px 0 0;
         border-bottom: 1px solid #333;
+        flex-shrink: 0;
     `;
     
     const title = document.createElement('span');
@@ -78,43 +95,45 @@ function createDashboardElement() {
     header.appendChild(title);
     header.appendChild(buttons);
     
-    // Content (scrollable)
-    const content = document.createElement('div');
-    content.id = 'dashboardContent';
-    content.style.cssText = `
+    // Metrics content
+    metricsEl = document.createElement('div');
+    metricsEl.id = 'dashboardMetrics';
+    metricsEl.style.cssText = `
         flex: 1;
         overflow-y: auto;
-        padding: 10px 15px;
+        padding: 15px;
         color: #0f0;
-        line-height: 1.5;
+        line-height: 1.6;
         white-space: pre-wrap;
         word-break: break-all;
+        min-height: 200px;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 13px;
     `;
     
     // Scrollbar styling
     const style = document.createElement('style');
     style.textContent = `
-        #dashboardContent::-webkit-scrollbar {
+        #dashboardMetrics::-webkit-scrollbar {
             width: 8px;
         }
-        #dashboardContent::-webkit-scrollbar-track {
+        #dashboardMetrics::-webkit-scrollbar-track {
             background: #1a1a2e;
             border-radius: 4px;
         }
-        #dashboardContent::-webkit-scrollbar-thumb {
+        #dashboardMetrics::-webkit-scrollbar-thumb {
             background: #00ff88;
             border-radius: 4px;
         }
-        #dashboardContent::-webkit-scrollbar-thumb:hover {
+        #dashboardMetrics::-webkit-scrollbar-thumb:hover {
             background: #00cc6a;
         }
     `;
-    dashboard.appendChild(style);
-    dashboard.appendChild(header);
-    dashboard.appendChild(content);
+    dashboardEl.appendChild(style);
+    dashboardEl.appendChild(header);
+    dashboardEl.appendChild(metricsEl);
     
-    document.body.appendChild(dashboard);
-    updateDashboardContent();
+    document.body.appendChild(dashboardEl);
 }
 
 function createButton(text, onClick) {
@@ -137,19 +156,83 @@ function createButton(text, onClick) {
     return btn;
 }
 
-function updateDashboardContent() {
-    const content = document.getElementById('dashboardContent');
-    if (!content) return;
+function updateDashboardContent(state) {
+    if (!metricsEl) return;
     
-    const logs = appState.dashboardLogs || [];
-    content.textContent = logs.join('\n') || '📭 Логи пусты';
+    const logs = state.dashboardLogs || [];
+    
+    if (logs.length === 0) {
+        metricsEl.textContent = '📭 Логи пусты\n\nВключите камеру/микрофон для отображения данных';
+    } else {
+        metricsEl.textContent = logs.join('\n');
+    }
     
     // Auto-scroll to bottom
-    content.scrollTop = content.scrollHeight;
+    setTimeout(() => {
+        if (metricsEl) {
+            metricsEl.scrollTop = metricsEl.scrollHeight;
+        }
+    }, 10);
 }
 
-export function initDashboard() {
-    // Подписка на изменения состояния
-    const unsubscribe = () => {};
-    return unsubscribe;
+function startAutoUpdate() {
+    // Обновляем дашборд каждые 500мс
+    updateInterval = setInterval(() => {
+        if (metricsEl) {
+            const metrics = collectMetrics();
+            const logText = metrics.join('\n');
+            
+            // Получаем текущие логи
+            const currentLogs = appState.dashboardLogs || [];
+            
+            // Если метрики отличаются от последних логов - добавляем
+            const lastLog = currentLogs[currentLogs.length - 1] || '';
+            if (!lastLog.includes('[METRICS]')) {
+                // Добавляем текущие метрики как лог
+                const timestamp = new Date().toLocaleTimeString();
+                metrics.forEach(m => {
+                    if (!currentLogs.some(l => l.includes(m.split(':')[0]))) {
+                        // addDashboardLog(`[METRICS] ${m}`);
+                    }
+                });
+            }
+            
+            // Обновляем отображение
+            const allLogs = [...currentLogs, ...metrics.map(m => `[${new Date().toLocaleTimeString()}] ${m}`)];
+            metricsEl.textContent = allLogs.slice(-50).join('\n');
+            metricsEl.scrollTop = metricsEl.scrollHeight;
+        }
+    }, 500);
+}
+
+function collectMetrics() {
+    const metrics = [];
+    
+    // WebCodecs статус
+    metrics.push(`🎬 VideoDecoder: ${'VideoDecoder' in window ? '✓' : '✗'}`);
+    metrics.push(`🎵 AudioDecoder: ${'AudioDecoder' in window ? '✓' : '✗'}`);
+    metrics.push(`📹 VideoEncoder: ${'VideoEncoder' in window ? '✓' : '✗'}`);
+    metrics.push(`🎤 AudioEncoder: ${'AudioEncoder' in window ? '✓' : '✗'}`);
+    metrics.push(`🔁 MediaStreamTrackProcessor: ${'MediaStreamTrackProcessor' in window ? '✓' : '✗'}`);
+    
+    // SharedArrayBuffer
+    const sabAvailable = typeof SharedArrayBuffer !== 'undefined';
+    metrics.push(`💾 SharedArrayBuffer: ${sabAvailable ? '✓' : '✗'}`);
+    
+    // Secure Context
+    metrics.push(`🔒 Secure Context: ${window.isSecureContext ? '✓' : '✗'}`);
+    
+    // Audio Context
+    const audioCtx = window.AudioContext || window.webkitAudioContext;
+    metrics.push(`🎧 AudioContext: ${audioCtx ? '✓' : '✗'}`);
+    
+    // Network
+    if (navigator.connection) {
+        metrics.push(`🌐 Network: ${navigator.connection.effectiveType || 'unknown'} (${navigator.connection.downlink || '?'} Mbps)`);
+    }
+    
+    // Browser info
+    metrics.push(`🌍 Browser: ${navigator.userAgent.split(' ').pop()}`);
+    
+    return metrics;
 }
