@@ -41,17 +41,19 @@ export function initDashboard() {
 }
 
 function createDashboardElement() {
-    const isMobile = window.innerWidth <= 600;
+    const isMobile = window.innerWidth <= 900;
+    const panelWidth = isMobile ? 'calc(100vw - 40px)' : '600px';
+    const panelBottom = isMobile ? '80px' : '10px';
+    const panelFontSize = isMobile ? '11px' : '13px';
     
     dashboardEl = document.createElement('div');
     dashboardEl.id = 'dashboardPanel';
     dashboardEl.style.cssText = `
         position: fixed;
-        bottom: ${isMobile ? '60px' : '10px'};
-        left: 10px;
-        right: ${isMobile ? '10px' : 'auto'};
-        width: ${isMobile ? 'auto' : '600px'};
-        max-width: ${isMobile ? 'calc(100vw - 20px)' : '600px'};
+        bottom: ${panelBottom};
+        left: 20px;
+        width: ${panelWidth};
+        max-width: ${panelWidth};
         max-height: 400px;
         background: rgba(0, 0, 0, 0.9);
         border: 1px solid #333;
@@ -60,7 +62,7 @@ function createDashboardElement() {
         display: flex;
         flex-direction: column;
         font-family: 'Consolas', 'Monaco', monospace;
-        font-size: ${isMobile ? '11px' : '12px'};
+        font-size: ${panelFontSize};
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     `;
     
