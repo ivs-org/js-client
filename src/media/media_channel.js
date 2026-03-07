@@ -220,9 +220,10 @@ export class MediaChannel {
         this.started = true;
 
         if (this.channelType === 'audio') {
+            setAudioDebugStatus(`🎧 Audio channel start...`);
             this._connectWS();
+            setAudioDebugStatus(`🎧 Audio channel started: ${this.label}`);
             console.log(`🎧 Audio channel started: ${this.label}`);
-
             return;
         }
 
@@ -440,9 +441,19 @@ export class MediaChannel {
 
                     this.collector.process(rtpPlain.buffer);
                 } else {
+                    // Аудио без крипто
+                    if (this._packetCount === undefined) this._packetCount = 0;
+                    this._packetCount++;
+                    
                     if (this.decoder && this.workletNode) {
                         const plain = rtp.subarray(hlen);
                         this.decoder.decode(plain);
+                        
+                        if (this._packetCount % 100 === 1) {
+                            setAudioDebugStatus(`📦 Пакетов: ${this._packetCount}`);
+                        }
+                    } else {
+                        setAudioDebugStatus(`⚠️ Нет decoder/worklet: decoder=${!!this.decoder}, worklet=${!!this.workletNode}`);
                     }
                 }
                 return;
@@ -478,8 +489,18 @@ export class MediaChannel {
 
                 this.collector.process(rtpPlain.buffer);
             } else {
+                // Аудио с крипто
+                if (this._packetCountCrypto === undefined) this._packetCountCrypto = 0;
+                this._packetCountCrypto++;
+                
                 if (this.decoder && this.workletNode) {
                     this.decoder.decode(plainBuf);
+                    
+                    if (this._packetCountCrypto % 100 === 1) {
+                        setAudioDebugStatus(`📦🔐 Пакетов (crypto): ${this._packetCountCrypto}`);
+                    }
+                } else {
+                    setAudioDebugStatus(`⚠️ Нет decoder/worklet (crypto): decoder=${!!this.decoder}, worklet=${!!this.workletNode}`);
                 }
             }
         };
