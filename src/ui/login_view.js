@@ -4,6 +4,9 @@ import { SessionStore, normalizeServer } from '../data/session_store.js';
 import { UrlBoot } from '../core/url_boot.js';
 import { confirmDialog, showError } from '../ui/modal.js';
 
+// Сервер по умолчанию из конфига
+const DEFAULT_SERVER = 'core.videograce.ru';
+
 export function renderLoginView(root, state) {
     if (!root) return;
 
@@ -45,7 +48,10 @@ export function renderLoginView(root, state) {
         lockedServer: isBootLocked ? bootServer : ''
     });
 
-    const effectiveServer = isBootLocked ? bootServer : (serverFromState || '');
+    // effectiveServer:
+    // - если URL lock: используем bootServer
+    // - иначе: serverFromState || DEFAULT_SERVER
+    const effectiveServer = isBootLocked ? bootServer : (serverFromState || DEFAULT_SERVER);
 
     root.innerHTML = `
       <div class="auth-shell">

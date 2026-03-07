@@ -1,11 +1,14 @@
 // src/ui/register_view.js
 import { appState, setState } from '../core/app_state.js';
 
+// Сервер по умолчанию из конфига
+const DEFAULT_SERVER = 'core.videograce.ru';
+
 export function renderRegisterView(root, state) {
     if (!root) return;
 
     const stored = (state && state.auth) ? state.auth : (appState.auth || {});
-    const server = stored?.server || '';
+    const server = stored?.server || DEFAULT_SERVER;
     const login = stored?.login || '';
 
     root.innerHTML = `
