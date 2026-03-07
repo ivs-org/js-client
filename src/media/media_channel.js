@@ -87,6 +87,15 @@ export class MediaChannel {
         const channels = 2;
         const capacity = 48000; // 1 сек/канал
 
+        // Проверка доступности SharedArrayBuffer
+        const sabAvailable = typeof SharedArrayBuffer !== 'undefined';
+        
+        if (!sabAvailable) {
+            console.warn('⚠️ SharedArrayBuffer недоступен, используем запасной вариант (AudioBuffer)');
+            await this._initAudioFallback();
+            return;
+        }
+
         // индексы (общие для всех каналов)
         const idxSAB = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 2);
         const idx = new Int32Array(idxSAB);
@@ -122,6 +131,53 @@ export class MediaChannel {
         this.ring = { idx, dataViews, capacity, channels };
 
         console.log(`🎧 Audio channel initialized`);
+    }
+
+    /**
+     * Запасной вариант для браузеров без SharedArrayBuffer (Telegram WebView, etc.)
+     * Использует AudioBufferSourceNode вместо AudioWorklet
+     */
+    async _initAudioFallback() {
+        const channels = 2;
+        const capacity = 48000; // 1 сек/канал
+        
+        // Создаём AudioBuffer для буферизации
+        this._audioBuffer = this.audioCtx.createBuffer(channels, capacity, this.audioCtx.sampleRate);
+        this._writeIndex = 0;
+        this._readIndex = 0;
+        
+        // Создаём GainNode для управления громкостью
+        this.gainNode = this.audioCtx.createGain();
+        this.gainNode.gain.value = 1.0;
+        this.gainNode.connect(this.audioCtx.destination);
+        
+        // Создаём ScriptProcessorNode для записи данных (замена AudioWorklet)
+        this._scriptProcessor = this.audioCtx.createScriptProcessor(4096, 0, channels);
+        this._scriptProcessor.connect(this.gainNode);
+        
+        this._scriptProcessor.onaudioprocess = (e) => {
+            const outputL = e.outputBuffer.getChannelData(0);
+            const outputR = e.outputBuffer.getChannelData(1);
+            
+            for (let i = 0; i < outputL.length; i++) {
+                if (this._readIndex >= this._writeIndex) {
+                    // Буфер пуст — тишина
+                    outputL[i] = 0;
+                    outputR[i] = 0;
+                } else {
+                    outputL[i] = this._audioBuffer.getChannelData(0)[this._readIndex];
+                    outputR[i] = this._audioBuffer.getChannelData(1)[this._readIndex];
+                    this._readIndex++;
+                }
+            }
+        };
+        
+        this.ring = {
+            write: () => this._writeIndex,
+            data: this._audioBuffer
+        };
+        
+        console.log(`🎧 Audio channel initialized (fallback mode)`);
     }
 
     start(onAttached) {
@@ -438,6 +494,13 @@ export class MediaChannel {
     _pushToRing(channelsPCM /* Array<Float32Array> */) {
         if (!this.ring) return; // защита
 
+        // Fallback режим (без SharedArrayBuffer)
+        if (this._audioBuffer && this._scriptProcessor) {
+            this._pushToFallback(channelsPCM);
+            return;
+        }
+
+        // Обычный режим (с SharedArrayBuffer)
         const { idx, dataViews, capacity, channels } = this.ring;
         const write = Atomics.load(idx, 0);
         const read = Atomics.load(idx, 1);
@@ -475,6 +538,34 @@ export class MediaChannel {
             const avail = (w - r + capacity) % capacity;
             console.debug('[AUDIO] ring avail:', avail);
         }*/
+    }
+
+    /**
+     * Запись аудио данных в fallback буфер (без SharedArrayBuffer)
+     */
+    _pushToFallback(channelsPCM) {
+        const numFrames = channelsPCM[0].length;
+        const numChannels = channelsPCM.length;
+        
+        // Проверяем, чтобы не переполнить буфер
+        const availableSpace = this._audioBuffer.length - this._writeIndex;
+        if (numFrames > availableSpace) {
+            // Сбрасываем буфер при переполнении
+            this._writeIndex = 0;
+            this._readIndex = 0;
+        }
+        
+        // Копируем данные в AudioBuffer
+        for (let ch = 0; ch < numChannels; ch++) {
+            const channelData = this._audioBuffer.getChannelData(ch);
+            const src = channelsPCM[ch] || channelsPCM[0];
+            
+            for (let i = 0; i < numFrames; i++) {
+                channelData[this._writeIndex + i] = src[i];
+            }
+        }
+        
+        this._writeIndex += numFrames;
     }
 
     _onAudioFrame(audioData) {
