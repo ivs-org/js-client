@@ -96,8 +96,151 @@ let pendingInvite = null;
 // Точка входа
 // ─────────────────────────────────────
 
+/**
+ * Проверка на встроенные браузеры (Telegram, WhatsApp, etc.)
+ */
+function isEmbeddedBrowser() {
+    const ua = navigator.userAgent || '';
+    
+    // Telegram Webview
+    if (/Telegram/i.test(ua)) {
+        return { name: 'Telegram', detected: true };
+    }
+    
+    // WhatsApp
+    if (/WhatsApp/i.test(ua)) {
+        return { name: 'WhatsApp', detected: true };
+    }
+    
+    // Facebook Messenger
+    if (/FBAN|FBAV/i.test(ua)) {
+        return { name: 'Facebook Messenger', detected: true };
+    }
+    
+    // Instagram
+    if (/Instagram/i.test(ua)) {
+        return { name: 'Instagram', detected: true };
+    }
+    
+    // VK App
+    if (/VKApp|VKMobile/i.test(ua)) {
+        return { name: 'VK App', detected: true };
+    }
+    
+    // Line
+    if (/Line/i.test(ua)) {
+        return { name: 'Line', detected: true };
+    }
+    
+    // WeChat
+    if (/MicroMessenger|WeChat/i.test(ua)) {
+        return { name: 'WeChat', detected: true };
+    }
+    
+    return { detected: false };
+}
+
+/**
+ * Попытка открыть в системном браузере
+ */
+function openInSystemBrowser() {
+    const url = window.location.href;
+    
+    // Пробуем разные схемы для открытия в браузере
+    const schemes = [
+        `intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`,
+        `googlechrome://${url.replace(/^https?:\/\//, '')}`,
+        `chrome://${url}`,
+        `firefox://${url}`,
+        `opera://${url}`,
+    ];
+    
+    // Пробуем открыть через intent (Android)
+    for (const scheme of schemes) {
+        try {
+            window.location.href = scheme;
+        } catch { }
+    }
+    
+    // Показываем инструкцию
+    showEmbeddedBrowserWarning(url);
+}
+
+/**
+ * Показываем предупреждение о встроенном браузере
+ */
+function showEmbeddedBrowserWarning(url) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.9);
+        z-index: 999999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    overlay.innerHTML = `
+        <div style="
+            background: #1a1a1a;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 400px;
+            text-align: center;
+            color: white;
+        ">
+            <div style="font-size: 48px; margin-bottom: 20px;">📱</div>
+            <h2 style="margin: 0 0 15px 0; font-size: 22px;">Откройте в браузере</h2>
+            <p style="margin: 0 0 20px 0; color: #aaa; line-height: 1.5;">
+                Этот сайт не работает во встроенном браузере.<br><br>
+                <strong>Нажмите на меню (⋮ или ⋯) и выберите<br>«Открыть в браузере»</strong>
+            </p>
+            <div style="
+                background: #2a2a2a;
+                border-radius: 8px;
+                padding: 12px;
+                margin: 20px 0;
+                font-size: 12px;
+                color: #888;
+                word-break: break-all;
+            ">${url}</div>
+            <button onclick="this.parentElement.parentElement.remove()" style="
+                background: #4a9eff;
+                color: white;
+                border: none;
+                padding: 14px 28px;
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+                margin-top: 10px;
+            ">Понятно</button>
+            <div style="margin-top: 20px; font-size: 13px; color: #666;">
+                <strong>Android:</strong> Меню → Открыть в Chrome<br>
+                <strong>iOS:</strong> Меню → Открыть в Safari
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     const boot = bootstrap();
+
+    // Проверка на встроенные браузеры (Telegram, WhatsApp, etc.)
+    const embedded = isEmbeddedBrowser();
+    if (embedded.detected) {
+        console.warn(`⚠️ Обнаружен встроенный браузер: ${embedded.name}`);
+        // Показываем предупреждение, но не блокируем работу
+        openInSystemBrowser();
+    }
 
     // Firefox ESR: проверка MediaStreamTrackProcessor для информирования о режиме работы
     if (!('MediaStreamTrackProcessor' in window)) {

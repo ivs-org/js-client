@@ -44,9 +44,6 @@ async function stopCamPreview() {
     }
 
     camPrev.stream = null;
-    
-    // Firefox ESR: небольшая задержка для полного освобождения треков
-    await new Promise(r => setTimeout(r, 50));
 }
 
 async function startCamPreview(deviceId) {

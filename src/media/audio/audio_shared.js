@@ -75,13 +75,10 @@ export const AudioShared = {
         const ctx = this.ensureContext();
 
         const url = new URL('.', window.location.href).href
-            + 'src/media/audio/audio_processor.js?v=' + Date.now();
-
+            + 'src/media/audio/audio_processor.js';
+        
         this.workletReady = ctx.audioWorklet.addModule(url)
-            .then(() => {
-                console.log('✅ audio worklet preloaded');
-                console.log('   Registered processors: audio-processor, audio-recorder-processor');
-            })
+            .then(() => console.log('✅ audio worklet preloaded'))
             .catch(err => {
                 console.error('❌ audio worklet load failed:', err);
                 this.workletReady = null;

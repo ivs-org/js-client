@@ -61,12 +61,6 @@ export class CameraSession {
         this._processor = null;
         this._reader = null;
 
-        // Firefox ESR: canvas-based захват
-        this._captureCanvas = null;
-        this._captureCtx = null;
-        this._videoEl = null;
-        this._frameRequest = null;
-
         // state
         this._closing = false;
         this._localRunning = false;
@@ -142,48 +136,30 @@ export class CameraSession {
         const s = this._track.getSettings?.() ?? {};
         if (s.frameRate) this.fps = Math.round(s.frameRate);
 
-        // Firefox ESR: MediaStreamTrackProcessor недоступен, используем canvas-based подход
-        if ('MediaStreamTrackProcessor' in window) {
-            // Современный подход с WebCodecs
-            this._processor = new MediaStreamTrackProcessor({ track: this._track });
-            this._reader = this._processor.readable.getReader();
+        // сначала подключаем processor/reader
+        this._processor = new MediaStreamTrackProcessor({ track: this._track });
+        this._reader = this._processor.readable.getReader();
 
-            // берём ПЕРВЫЙ кадр и считаем размеры по нему (это и есть фактический размер потока)
-            const first = await this._reader.read();
-            if (first.done || !first.value) {
-                await this.stop();
-                throw new Error('📷 [Cam] No video frames');
-            }
+        // берём ПЕРВЫЙ кадр и считаем размеры по нему (это и есть фактический размер потока)
+        const first = await this._reader.read();
+        if (first.done || !first.value) {
+            await this.stop();
+            throw new Error('📷 [Cam] No video frames');
+        }
 
-            const firstFrame = first.value;
-            try {
-                const fw = (firstFrame.displayWidth || firstFrame.codedWidth || s.width || 640) | 0;
-                const fh = (firstFrame.displayHeight || firstFrame.codedHeight || s.height || 360) | 0;
-
-                this._encWidth = EVEN(fw) || fw;
-                this._encHeight = EVEN(fh) || fh;
-                this._needCrop = (this._encWidth !== fw) || (this._encHeight !== fh);
-
-                this.width = this._encWidth;
-                this.height = this._encHeight;
-            } finally {
-                firstFrame.close();
-            }
-
-            this._pumpFrames();
-        } else {
-            // Firefox ESR: canvas-based захват
-            const fw = (s.width || 640) | 0;
-            const fh = (s.height || 480) | 0;
+        const firstFrame = first.value;
+        try {
+            const fw = (firstFrame.displayWidth || firstFrame.codedWidth || s.width || 640) | 0;
+            const fh = (firstFrame.displayHeight || firstFrame.codedHeight || s.height || 360) | 0;
 
             this._encWidth = EVEN(fw) || fw;
             this._encHeight = EVEN(fh) || fh;
-            this._needCrop = false;
+            this._needCrop = (this._encWidth !== fw) || (this._encHeight !== fh);
 
             this.width = this._encWidth;
             this.height = this._encHeight;
-
-            this._setupCanvasCapture();
+        } finally {
+            firstFrame.close();
         }
 
         // если пользователь/ОС выключили камеру
@@ -191,97 +167,10 @@ export class CameraSession {
             this.stop().catch(() => { });
         };
 
+        this._pumpFrames();
+
         console.log(`📷 Camera local capture started: ${this.width}x${this.height}@${this.fps}`);
         return this.getCaptureInfo();
-    }
-
-    /**
-     * Firefox ESR: canvas-based захват кадров вместо MediaStreamTrackProcessor
-     */
-    _setupCanvasCapture() {
-        // Создаём canvas для захвата кадров
-        this._captureCanvas = document.createElement('canvas');
-        this._captureCanvas.width = this._encWidth;
-        this._captureCanvas.height = this._encHeight;
-        this._captureCtx = this._captureCanvas.getContext('2d', { willReadFrequently: true });
-
-        // Создаём video элемент для потока
-        this._videoEl = document.createElement('video');
-        this._videoEl.srcObject = this._stream;
-        this._videoEl.muted = true;
-        this._videoEl.playsInline = true;
-
-        const startCapture = () => {
-            this._videoEl.play().catch(e => console.warn('📷 [Cam] video play error:', e));
-
-            const captureFrame = () => {
-                if (this._closing || !this._captureCtx || !this._videoEl) return;
-
-                try {
-                    // Рисуем кадр из video на canvas
-                    this._captureCtx.drawImage(this._videoEl, 0, 0, this._encWidth, this._encHeight);
-
-                    // Создаём VideoFrame из canvas
-                    if (this._canEncode && this.encoder) {
-                        const frame = new VideoFrame(this._captureCanvas, {
-                            timestamp: performance.now() * 1000 // в микросекундах
-                        });
-
-                        const isKey = this._wantKeyframe;
-                        this.encoder.encode(frame, { keyFrame: isKey });
-                        this._wantKeyframe = false;
-
-                        frame.close();
-                    }
-
-                    // Показываем превью
-                    if (this._previewRenderer) {
-                        const bitmap = this._captureCanvas;
-                        this._previewRenderer.drawBitmapContain(bitmap);
-                    }
-                } catch (e) {
-                    console.warn('📷 [Cam] captureFrame error:', e);
-                }
-
-                // Следующий кадр
-                const frameInterval = 1000 / this.fps;
-                this._frameRequest = setTimeout(() => {
-                    if (!this._closing) {
-                        requestAnimationFrame(captureFrame);
-                    }
-                }, frameInterval);
-            };
-
-            // Запускаем захват после загрузки первого кадра
-            this._videoEl.onloadeddata = () => {
-                requestAnimationFrame(captureFrame);
-            };
-        };
-
-        // Ждём загрузки потока
-        if (this._videoEl.readyState >= 2) {
-            startCapture();
-        } else {
-            this._videoEl.onloadedmetadata = startCapture;
-        }
-    }
-
-    async _stopCanvasCapture() {
-        if (this._frameRequest) {
-            clearTimeout(this._frameRequest);
-            this._frameRequest = null;
-        }
-
-        if (this._videoEl) {
-            try { this._videoEl.pause(); } catch { }
-            this._videoEl.srcObject = null;
-            this._videoEl = null;
-        }
-
-        if (this._captureCanvas) {
-            this._captureCanvas = null;
-            this._captureCtx = null;
-        }
     }
 
     async restartCapture() {
@@ -386,10 +275,6 @@ export class CameraSession {
         this._closing = true;
         this._localRunning = false;
 
-        // Останавливаем canvas-based захват (Firefox ESR)
-        await this._stopCanvasCapture();
-
-        // Останавливаем MediaStreamTrackProcessor (современный подход)
         try { await this._reader?.cancel(); } catch { }
         this._reader = null;
         this._processor = null;
