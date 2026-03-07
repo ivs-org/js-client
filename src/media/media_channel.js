@@ -10,6 +10,7 @@ import { RTPCollector } from '../transport/rtp_collector.js';
 import { VP8Decoder } from '../codecs/vp8_decoder.js';
 import { OpusDecoder } from '../codecs/opus_decoder.js';
 import { CanvasRenderer } from './video/canvas_renderer.js';
+import { setAudioDebugStatus } from '../core/app_state.js';
 import {
     importAesGcmKey, buildMediaFrame, parseMediaFrame, rtpHeaderLen, serializeRTCP_APP, gcmDecrypt, makeIvGcm,
     WsBinaryMsgType
@@ -85,19 +86,19 @@ export class MediaChannel {
         await AudioShared.ensureWorklet();
 
         // Показываем статус
-        this._showMediaStatus(`🎧 Инициализация аудио...`);
+        setAudioDebugStatus(`🎧 Инициализация аудио...`);
 
         const channels = 2;
         const capacity = 48000; // 1 сек/канал
 
         // Проверка доступности SharedArrayBuffer
         const sabAvailable = typeof SharedArrayBuffer !== 'undefined';
-        this._showMediaStatus(`SharedArrayBuffer: ${sabAvailable ? '✓' : '✗'}`);
+        setAudioDebugStatus(`SharedArrayBuffer: ${sabAvailable ? '✓' : '✗'}`);
         
         if (!sabAvailable) {
             console.warn('⚠️ SharedArrayBuffer недоступен, используем запасной вариант (AudioBuffer)');
             await this._initAudioFallback();
-            this._showMediaStatus(`🎧 Аудио: fallback режим`);
+            setAudioDebugStatus(`🎧 Аудио: fallback режим`);
             return;
         }
 
@@ -136,40 +137,7 @@ export class MediaChannel {
         this.ring = { idx, dataViews, capacity, channels };
 
         console.log(`🎧 Audio channel initialized`);
-        this._showMediaStatus(`🎧 Аудио готово`);
-    }
-
-    _showMediaStatus(msg) {
-        console.log(msg);
-        // Создаём или обновляем статус в UI
-        let statusEl = document.getElementById('media-status-debug');
-        if (!statusEl) {
-            statusEl = document.createElement('div');
-            statusEl.id = 'media-status-debug';
-            statusEl.style.cssText = `
-                position: fixed;
-                bottom: 60px;
-                left: 10px;
-                background: rgba(0,0,0,0.8);
-                color: #0f0;
-                padding: 10px;
-                border-radius: 5px;
-                font-size: 12px;
-                z-index: 999999;
-                max-width: 400px;
-                white-space: pre-wrap;
-            `;
-            document.body.appendChild(statusEl);
-        }
-        const oldText = statusEl.textContent || '';
-        statusEl.textContent = oldText + '\n' + msg;
-        
-        // Убираем через 5 секунд
-        setTimeout(() => {
-            if (statusEl && statusEl.textContent.includes(msg)) {
-                statusEl.textContent = statusEl.textContent.replace(msg, '').trim();
-            }
-        }, 5000);
+        setAudioDebugStatus(`🎧 Аудио готово`);
     }
 
     /**

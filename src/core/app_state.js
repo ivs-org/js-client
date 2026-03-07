@@ -68,6 +68,10 @@ export const appState = {
     camEnabled: false,
     demoEnabled: false,
     micEnabled: false,
+    
+    // Бортовая панель (dashboard)
+    showDashboard: false,
+    dashboardLogs: [],
 };
 
 const listeners = new Set();
@@ -80,4 +84,26 @@ export function subscribe(listener) {
 export function setState(patch) {
     Object.assign(appState, patch);
     for (const l of listeners) l(appState);
+}
+
+export function setAudioDebugStatus(msg) {
+    addDashboardLog(msg);
+    console.log('🎵 Audio Status:', msg);
+}
+
+export function addDashboardLog(msg) {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${msg}`;
+    const maxLogs = 100;
+    
+    const newLogs = [...appState.dashboardLogs, logEntry].slice(-maxLogs);
+    setState({ dashboardLogs: newLogs });
+}
+
+export function clearDashboardLogs() {
+    setState({ dashboardLogs: [] });
+}
+
+export function toggleDashboard() {
+    setState({ showDashboard: !appState.showDashboard });
 }

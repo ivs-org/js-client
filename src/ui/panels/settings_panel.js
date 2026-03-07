@@ -1,5 +1,5 @@
 // src/ui/panels/settings_panel.js
-import { appState, setState } from '../../core/app_state.js';
+import { appState, setState, toggleDashboard } from '../../core/app_state.js';
 import { Storage } from '../../data/storage.js';
 import { MicMonitor } from '../monitor/mic_monitor.js';
 
@@ -339,7 +339,25 @@ function renderGeneral() {
         </label>
       </div>
 
+      <div class="settings-card">
+        <button class="settings-button" data-action="dashboard:toggle" style="
+            background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%);
+            color: #000;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            margin-top: 10px;
+            transition: all 0.2s;
+        ">
+            📊 ${appState.showDashboard ? 'Скрыть бортовую панель' : 'Показать бортовую панель'}
+        </button>
+      </div>
+
       <div class="settings-hint">
+        Бортовая панель показывает техническую информацию: статус аудио, видео, сети.<br><br>
         Локальные привычки UI: вид сетка/спикер, автопереходы, и т.д.
       </div>
     </div>
@@ -490,6 +508,12 @@ export function renderSettingsPanel(root, state) {
                 const r = await probeMedia('both');
                 if (!r.ok) console.warn('[perm] both:', r.error);
                 await loadDevices();
+                return;
+            }
+
+            if (action === 'dashboard:toggle') {
+                toggleDashboard();
+                bumpSettingsRender();
                 return;
             }
         });

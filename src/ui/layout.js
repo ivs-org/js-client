@@ -10,6 +10,7 @@ import { renderButtonsPanel } from './panels/buttons_panel.js';
 import { renderSettingsPanel } from './panels/settings_panel.js';
 import { renderModalOverlay } from './modal_overlay.js';
 import { renderUpdateBanner, wireUpdateBanner } from './update_banner.js'
+import { renderDashboard } from './dashboard.js';
 
 export function initLayout() {
     const root = document.getElementById('appRoot');
@@ -178,6 +179,9 @@ function renderMain(root, state) {
     renderContactsPanel(contactsRoot, state);
     renderCallPanel(callRoot, state);
     renderChatPanel(chatRoot, state);
+
+    // Бортовая панель
+    renderDashboard(state);
 
     updateLocalPreview(state);
 }

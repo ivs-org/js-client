@@ -11,7 +11,7 @@ import { UrlBoot } from './core/url_boot.js';
 import { startVersionWatch } from './core/version_watch.js';
 import { SessionStore, makeDbName, normalizeServer } from './data/session_store.js';
 import { Storage, closeDb, setDbName } from './data/storage.js';
-import { setState, appState } from './core/app_state.js';
+import { setState, appState, setAudioDebugStatus } from './core/app_state.js';
 import { MemberList } from './data/member_list.js';
 import { MessagesStorage, setSelfId as messagesSetSelfId } from './data/messages_storage.js';
 import { initLayout } from './ui/layout.js';
@@ -98,6 +98,9 @@ let pendingInvite = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     const boot = bootstrap();
+
+    // Тестовый статус для проверки
+    setAudioDebugStatus('🔧 Web-клиент загружен...');
 
     // Firefox ESR: проверка MediaStreamTrackProcessor для информирования о режиме работы
     if (!('MediaStreamTrackProcessor' in window)) {
