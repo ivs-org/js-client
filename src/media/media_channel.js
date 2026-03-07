@@ -174,16 +174,31 @@ export class MediaChannel {
             const outputL = e.outputBuffer.getChannelData(0);
             const outputR = e.outputBuffer.getChannelData(1);
 
+            // Считаем сколько данных прочитали
+            let readCount = 0;
+            let signalLevel = 0;
+
             for (let i = 0; i < outputL.length; i++) {
                 if (this._readIndex >= this._writeIndex) {
                     // Буфер пуст — тишина
                     outputL[i] = 0;
                     outputR[i] = 0;
                 } else {
-                    outputL[i] = this._audioBuffer.getChannelData(0)[this._readIndex];
-                    outputR[i] = this._audioBuffer.getChannelData(1)[this._readIndex];
+                    outputL[i] = this._audioBuffer.getChannelData(0)[this._readIndex % this._audioBuffer.length];
+                    outputR[i] = this._audioBuffer.getChannelData(1)[this._readIndex % this._audioBuffer.length];
+                    signalLevel += Math.abs(outputL[i]);
                     this._readIndex++;
+                    readCount++;
                 }
+            }
+            
+            // Лог каждые 100 раз
+            if (this._fallbackReadCount === undefined) this._fallbackReadCount = 0;
+            this._fallbackReadCount++;
+            
+            if (this._fallbackReadCount % 100 === 0) {
+                const avgLevel = signalLevel / outputL.length;
+                setAudioDebugStatus(`🔊 Чтение: ${readCount}/${outputL.length}, уровень: ${avgLevel.toFixed(4)}`);
             }
         };
 
@@ -563,10 +578,28 @@ export class MediaChannel {
         const numFrames = channelsPCM[0].length;
         const numChannels = channelsPCM.length;
         
+        // Считаем уровень сигнала для отладки
+        let signalLevel = 0;
+        for (let ch = 0; ch < numChannels; ch++) {
+            for (let i = 0; i < numFrames; i++) {
+                signalLevel += Math.abs(channelsPCM[ch][i]);
+            }
+        }
+        signalLevel /= (numFrames * numChannels);
+        
+        // Лог каждые 100 кадров
+        if (this._fallbackWriteCount === undefined) this._fallbackWriteCount = 0;
+        this._fallbackWriteCount++;
+        
+        if (this._fallbackWriteCount % 100 === 0) {
+            setAudioDebugStatus(`📝 Запись: ${numFrames} сэмплов, уровень: ${signalLevel.toFixed(4)}`);
+        }
+        
         // Проверяем, чтобы не переполнить буфер
-        const availableSpace = this._audioBuffer.length - this._writeIndex;
+        const availableSpace = this._audioBuffer.length - (this._writeIndex - this._readIndex);
         if (numFrames > availableSpace) {
             // Сбрасываем буфер при переполнении
+            setAudioDebugStatus(`⚠️ Переполнение буфера, сброс...`);
             this._writeIndex = 0;
             this._readIndex = 0;
         }
@@ -577,7 +610,7 @@ export class MediaChannel {
             const src = channelsPCM[ch] || channelsPCM[0];
             
             for (let i = 0; i < numFrames; i++) {
-                channelData[this._writeIndex + i] = src[i];
+                channelData[this._writeIndex % this._audioBuffer.length + i] = src[i];
             }
         }
         

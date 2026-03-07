@@ -41,13 +41,17 @@ export function initDashboard() {
 }
 
 function createDashboardElement() {
+    const isMobile = window.innerWidth <= 600;
+    
     dashboardEl = document.createElement('div');
     dashboardEl.id = 'dashboardPanel';
     dashboardEl.style.cssText = `
         position: fixed;
-        bottom: 10px;
+        bottom: ${isMobile ? '60px' : '10px'};
         left: 10px;
-        width: 600px;
+        right: ${isMobile ? '10px' : 'auto'};
+        width: ${isMobile ? 'auto' : '600px'};
+        max-width: ${isMobile ? 'calc(100vw - 20px)' : '600px'};
         max-height: 400px;
         background: rgba(0, 0, 0, 0.9);
         border: 1px solid #333;
@@ -56,7 +60,7 @@ function createDashboardElement() {
         display: flex;
         flex-direction: column;
         font-family: 'Consolas', 'Monaco', monospace;
-        font-size: 12px;
+        font-size: ${isMobile ? '11px' : '12px'};
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     `;
     
@@ -101,14 +105,15 @@ function createDashboardElement() {
     metricsEl.style.cssText = `
         flex: 1;
         overflow-y: auto;
+        overflow-x: auto;
         padding: 15px;
         color: #0f0;
         line-height: 1.6;
-        white-space: pre-wrap;
-        word-break: break-all;
+        white-space: nowrap;
+        word-break: normal;
         min-height: 200px;
         font-family: 'Consolas', 'Monaco', monospace;
-        font-size: 13px;
+        font-size: ${isMobile ? '11px' : '13px'};
     `;
     
     // Scrollbar styling
@@ -116,6 +121,7 @@ function createDashboardElement() {
     style.textContent = `
         #dashboardMetrics::-webkit-scrollbar {
             width: 8px;
+            height: 8px;
         }
         #dashboardMetrics::-webkit-scrollbar-track {
             background: #1a1a2e;
