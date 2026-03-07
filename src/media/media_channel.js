@@ -523,12 +523,23 @@ export class MediaChannel {
     }
 
     _pushToRing(channelsPCM /* Array<Float32Array> */) {
-        if (!this.ring) return; // защита
+        if (!this.ring) {
+            console.warn('⚠️ _pushToRing: ring is null');
+            return;
+        } // защита
 
         // Fallback режим (без SharedArrayBuffer)
         if (this._audioBuffer && this._scriptProcessor) {
             this._pushToFallback(channelsPCM);
             return;
+        }
+
+        // Отладка: если fallback элементы есть, но не используются
+        if (this._audioBuffer || this._scriptProcessor) {
+            console.warn('⚠️ _pushToRing: fallback частично инициализирован', {
+                hasBuffer: !!this._audioBuffer,
+                hasProcessor: !!this._scriptProcessor
+            });
         }
 
         // Обычный режим (с SharedArrayBuffer)
@@ -620,6 +631,16 @@ export class MediaChannel {
     _onAudioFrame(audioData) {
         const numChannels = audioData.numberOfChannels;
         const numFrames = audioData.numberOfFrames;
+
+        // Дебаг для fallback режима
+        if (this._audioBuffer && this._scriptProcessor) {
+            if (this._fallbackFrameCount === undefined) this._fallbackFrameCount = 0;
+            this._fallbackFrameCount++;
+            
+            if (this._fallbackFrameCount % 100 === 1) {
+                setAudioDebugStatus(`🎵 Декодировано кадров: ${this._fallbackFrameCount}`);
+            }
+        }
 
         // выделяем буфер на все каналы одновременно
         const interleaved = new Float32Array(audioData.allocationSize({ planeIndex: 0 }));
