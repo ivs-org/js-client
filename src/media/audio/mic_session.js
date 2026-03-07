@@ -88,6 +88,11 @@ export class MicSession {
         this._time = null;
         this._vadTimer = 0;
 
+        // Firefox ESR: AudioWorklet/ScriptProcessor захват
+        this._audioSource = null;
+        this._workletNode = null;
+        this._scriptNode = null;
+
         this._level = 0;
         this._speaking = false;
         this._aboveSince = 0;
@@ -139,29 +144,139 @@ export class MicSession {
             this._startVad(this._stream);
         }
 
-        // TrackProcessor / reader (для WebCodecs AudioEncoder)
-        this._processor = new MediaStreamTrackProcessor({ track: this._track });
-        this._reader = this._processor.readable.getReader();
+        // Firefox ESR: MediaStreamTrackProcessor недоступен, используем AudioWorklet
+        if ('MediaStreamTrackProcessor' in window) {
+            // Современный подход с WebCodecs
+            this._processor = new MediaStreamTrackProcessor({ track: this._track });
+            this._reader = this._processor.readable.getReader();
 
-        // первый AudioData — чтобы узнать фактический формат
-        const first = await this._reader.read();
-        if (first.done || !first.value) {
-            await this.stop();
-            throw new Error('[Mic] No audio frames');
+            // первый AudioData — чтобы узнать фактический формат
+            const first = await this._reader.read();
+            if (first.done || !first.value) {
+                await this.stop();
+                throw new Error('[Mic] No audio frames');
+            }
+
+            const firstAudio = first.value;
+            this._pendingFirst = firstAudio;
+
+            this.sampleRate = firstAudio.sampleRate || this.sampleRate || 48000;
+            this.channels = firstAudio.numberOfChannels || this.channels || 1;
+
+            this._pumpFrames();
+        } else {
+            // Firefox ESR: AudioWorklet для захвата PCM
+            this._setupAudioWorkletCapture();
         }
-
-        const firstAudio = first.value;
-        this._pendingFirst = firstAudio;
-
-        this.sampleRate = firstAudio.sampleRate || this.sampleRate || 48000;
-        this.channels = firstAudio.numberOfChannels || this.channels || 1;
 
         this._track.onended = () => { this.stop().catch(() => { }); };
 
-        this._pumpFrames();
-
         console.log(`🎙️ Mic local capture started: ${this.sampleRate}Hz ch=${this.channels}`);
         return this.getCaptureInfo();
+    }
+
+    /**
+     * Firefox ESR: AudioWorklet захват вместо MediaStreamTrackProcessor
+     */
+    _setupAudioWorkletCapture() {
+        // Используем AudioShared context для работы с аудио
+        const audioContext = AudioShared.ensureContext();
+
+        // Создаём MediaStreamSource из потока микрофона
+        this._audioSource = audioContext.createMediaStreamSource(this._stream);
+
+        // Пробуем AudioWorklet, если не получилось — ScriptProcessorNode
+        try {
+            // Создаём Worklet node для обработки аудио
+            this._workletNode = new AudioWorkletNode(audioContext, 'audio-recorder-processor', {
+                numberOfInputs: 1,
+                numberOfOutputs: 1,
+                channelCount: this.channels || 2,
+                channelCountMode: 'explicit',
+                channelInterpretation: 'speakers'
+            });
+
+            // Получаем данные из worklet через MessagePort
+            this._workletNode.port.onmessage = (event) => {
+                if (!this._canEncode || !this.encoder || this._closing) return;
+
+                const { audioData } = event.data;
+                if (audioData) {
+                    // Кодируем и отправляем
+                    this.encoder.encode(audioData);
+                }
+            };
+
+            this._audioSource.connect(this._workletNode);
+            this._workletNode.connect(audioContext.destination);
+
+            console.log(`🎙️ Mic using AudioWorklet fallback`);
+        } catch (e) {
+            console.warn('🎙️ AudioWorklet failed, using ScriptProcessorNode:', e);
+            this._setupScriptProcessorCapture(audioContext);
+        }
+
+        // Для совместимости устанавливаем параметры
+        this.sampleRate = audioContext.sampleRate;
+        this.channels = this.channels || 2;
+    }
+
+    /**
+     * Firefox ESR: ScriptProcessorNode захват (запасной вариант)
+     */
+    _setupScriptProcessorCapture(audioContext) {
+        const bufferSize = 4096;
+        const channels = this.channels || 2;
+
+        // ScriptProcessorNode (устаревший, но работает везде)
+        this._scriptNode = audioContext.createScriptProcessor(bufferSize, channels, channels);
+
+        this._scriptNode.onaudioprocess = (e) => {
+            if (!this._canEncode || !this.encoder || this._closing) return;
+
+            const inputData = [];
+            for (let ch = 0; ch < channels; ch++) {
+                inputData.push(e.inputBuffer.getChannelData(ch));
+            }
+
+            // Создаём AudioData из PCM данных
+            try {
+                const numChannels = channels;
+                const numFrames = inputData[0].length;
+                const bytesPerSample = 4; // Float32
+
+                // Для f32-planar: каждый канал — отдельный массив в ArrayBuffer
+                const planeSize = numFrames * bytesPerSample;
+                const totalSize = planeSize * numChannels;
+                const audioBuffer = new ArrayBuffer(totalSize);
+
+                // Копируем данные по каналам (planar формат)
+                for (let ch = 0; ch < numChannels; ch++) {
+                    const destView = new Float32Array(audioBuffer, ch * planeSize, numFrames);
+                    destView.set(inputData[ch]);
+                }
+
+                const audioData = new AudioData({
+                    format: 'f32-planar',
+                    sampleRate: audioContext.sampleRate,
+                    numberOfFrames: numFrames,
+                    numberOfChannels: numChannels,
+                    timestamp: performance.now() * 1000,
+                    data: audioBuffer
+                });
+
+                // Кодируем
+                this.encoder.encode(audioData);
+                audioData.close();
+            } catch (err) {
+                console.warn('🎙️ ScriptProcessor encode error:', err);
+            }
+        };
+
+        this._audioSource.connect(this._scriptNode);
+        this._scriptNode.connect(audioContext.destination);
+
+        console.log(`🎙️ Mic using ScriptProcessorNode fallback`);
     }
 
     async restartCapture() {
@@ -240,6 +355,22 @@ export class MicSession {
         this._localRunning = false;
 
         this._stopVad();
+
+        // Firefox ESR: останавливаем AudioWorklet/ScriptProcessor
+        if (this._workletNode) {
+            try { this._workletNode.disconnect(); } catch { }
+            this._workletNode = null;
+        }
+
+        if (this._scriptNode) {
+            try { this._scriptNode.disconnect(); } catch { }
+            this._scriptNode = null;
+        }
+
+        if (this._audioSource) {
+            try { this._audioSource.disconnect(); } catch { }
+            this._audioSource = null;
+        }
 
         if (this._pendingFirst) {
             try { this._pendingFirst.close(); } catch { }

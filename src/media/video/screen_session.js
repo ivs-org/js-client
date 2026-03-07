@@ -58,6 +58,12 @@ export class ScreenSession {
         this._processor = null;
         this._reader = null;
 
+        // Firefox ESR: canvas-based захват
+        this._captureCanvas = null;
+        this._captureCtx = null;
+        this._videoEl = null;
+        this._frameRequest = null;
+
         // state
         this._closing = false;
         this._localRunning = false;
@@ -120,13 +126,89 @@ export class ScreenSession {
             this.stop().catch(() => { });
         };
 
-        this._processor = new MediaStreamTrackProcessor({ track: this._track });
-        this._reader = this._processor.readable.getReader();
-
-        this._pumpFrames();
+        // Firefox ESR: MediaStreamTrackProcessor недоступен, используем canvas-based подход
+        if ('MediaStreamTrackProcessor' in window) {
+            // Современный подход с WebCodecs
+            this._processor = new MediaStreamTrackProcessor({ track: this._track });
+            this._reader = this._processor.readable.getReader();
+            this._pumpFrames();
+        } else {
+            // Firefox ESR: canvas-based захват
+            this._setupCanvasCapture();
+        }
 
         console.log(`🖥️ Screen local capture started: ${this.width}x${this.height}@${this.fps}`);
         return this.getCaptureInfo();
+    }
+
+    /**
+     * Firefox ESR: canvas-based захват кадров вместо MediaStreamTrackProcessor
+     */
+    _setupCanvasCapture() {
+        // Создаём canvas для захвата кадров
+        this._captureCanvas = document.createElement('canvas');
+        this._captureCanvas.width = this._encWidth;
+        this._captureCanvas.height = this._encHeight;
+        this._captureCtx = this._captureCanvas.getContext('2d', { willReadFrequently: true });
+
+        // Создаём video элемент для потока
+        this._videoEl = document.createElement('video');
+        this._videoEl.srcObject = this._stream;
+        this._videoEl.muted = true;
+        this._videoEl.playsInline = true;
+
+        const startCapture = () => {
+            this._videoEl.play().catch(e => console.warn('🖥️ [Screen] video play error:', e));
+
+            const captureFrame = () => {
+                if (this._closing || !this._captureCtx || !this._videoEl) return;
+
+                try {
+                    // Рисуем кадр из video на canvas
+                    this._captureCtx.drawImage(this._videoEl, 0, 0, this._encWidth, this._encHeight);
+
+                    // Создаём VideoFrame из canvas
+                    if (this._canEncode && this.encoder) {
+                        const frame = new VideoFrame(this._captureCanvas, {
+                            timestamp: performance.now() * 1000 // в микросекундах
+                        });
+
+                        const isKey = this._wantKeyframe;
+                        this.encoder.encode(frame, { keyFrame: isKey });
+                        this._wantKeyframe = false;
+
+                        frame.close();
+                    }
+
+                    // Показываем превью
+                    if (this._previewRenderer) {
+                        this._previewRenderer.drawBitmapContain(this._captureCanvas);
+                    }
+                } catch (e) {
+                    console.warn('🖥️ [Screen] captureFrame error:', e);
+                }
+
+                // Следующий кадр
+                const frameInterval = 1000 / this.fps;
+                this._frameRequest = setTimeout(() => {
+                    if (!this._closing) {
+                        requestAnimationFrame(captureFrame);
+                    }
+                }, frameInterval);
+            };
+
+            // Запускаем захват после загрузки первого кадра
+            this._videoEl.onloadeddata = () => {
+                requestAnimationFrame(captureFrame);
+            };
+        };
+
+        // Ждём загрузки потока
+        if (this._videoEl.readyState >= 2) {
+            startCapture();
+        } else {
+            this._videoEl.onloadedmetadata = startCapture;
+        }
     }
 
     getCaptureInfo() {
@@ -217,6 +299,10 @@ export class ScreenSession {
         this._closing = true;
         this._localRunning = false;
 
+        // Firefox ESR: останавливаем canvas-based захват
+        await this._stopCanvasCapture();
+
+        // Останавливаем MediaStreamTrackProcessor (современный подход)
         try { await this._reader?.cancel(); } catch { }
         this._reader = null;
         this._processor = null;
@@ -229,6 +315,24 @@ export class ScreenSession {
         if (this._stream) {
             try { this._stream.getTracks().forEach(t => t.stop()); } catch { }
             this._stream = null;
+        }
+    }
+
+    async _stopCanvasCapture() {
+        if (this._frameRequest) {
+            clearTimeout(this._frameRequest);
+            this._frameRequest = null;
+        }
+
+        if (this._videoEl) {
+            try { this._videoEl.pause(); } catch { }
+            this._videoEl.srcObject = null;
+            this._videoEl = null;
+        }
+
+        if (this._captureCanvas) {
+            this._captureCanvas = null;
+            this._captureCtx = null;
         }
     }
 
