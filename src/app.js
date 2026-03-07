@@ -472,13 +472,16 @@ function initButtonsPanelActions() {
                 break;
             case 'btnToggleCall':
                 if (!ctrl || !appState.online) return;
+                
+                // Если уже в конференции - отключаемся
+                if (ctrl.getCurrentConference() || appState.activeCall?.status === 'connected') {
+                    disconnectFromConference();
+                    return;
+                }
+                
+                // Иначе пробуем подключиться
                 if (appState.activeContactType === 'conference') {
-                    if (!ctrl.getCurrentConference()) {
-                        connectToConference();
-                    } else {
-                        // Отключиться
-                        disconnectFromConference();
-                    }
+                    connectToConference();
                 } else if (appState.activeContactType === 'member') {
                     if (appState.activeCall?.type === 'p2p') {
                         endP2PCall('manual');

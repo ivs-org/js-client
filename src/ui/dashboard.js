@@ -105,12 +105,11 @@ function createDashboardElement() {
     metricsEl.style.cssText = `
         flex: 1;
         overflow-y: auto;
-        overflow-x: auto;
         padding: 15px;
         color: #0f0;
         line-height: 1.6;
-        white-space: nowrap;
-        word-break: normal;
+        white-space: pre-wrap;
+        word-break: break-word;
         min-height: 200px;
         font-family: 'Consolas', 'Monaco', monospace;
         font-size: ${isMobile ? '11px' : '13px'};
