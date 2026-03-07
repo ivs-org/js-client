@@ -441,11 +441,11 @@ export class MediaChannel {
 
                     this.collector.process(rtpPlain.buffer);
                 } else {
-                    // Аудио без крипто
+                    // Аудио без крипто - декодируем если есть decoder (workletNode опционален для fallback)
                     if (this._packetCount === undefined) this._packetCount = 0;
                     this._packetCount++;
                     
-                    if (this.decoder && this.workletNode) {
+                    if (this.decoder) {
                         const plain = rtp.subarray(hlen);
                         this.decoder.decode(plain);
                         
@@ -453,7 +453,7 @@ export class MediaChannel {
                             setAudioDebugStatus(`📦 Пакетов: ${this._packetCount}`);
                         }
                     } else {
-                        setAudioDebugStatus(`⚠️ Нет decoder/worklet: decoder=${!!this.decoder}, worklet=${!!this.workletNode}`);
+                        setAudioDebugStatus(`⚠️ Нет decoder`);
                     }
                 }
                 return;
@@ -489,18 +489,18 @@ export class MediaChannel {
 
                 this.collector.process(rtpPlain.buffer);
             } else {
-                // Аудио с крипто
+                // Аудио с крипто - декодируем если есть decoder (workletNode опционален для fallback)
                 if (this._packetCountCrypto === undefined) this._packetCountCrypto = 0;
                 this._packetCountCrypto++;
                 
-                if (this.decoder && this.workletNode) {
+                if (this.decoder) {
                     this.decoder.decode(plainBuf);
                     
                     if (this._packetCountCrypto % 100 === 1) {
                         setAudioDebugStatus(`📦🔐 Пакетов (crypto): ${this._packetCountCrypto}`);
                     }
                 } else {
-                    setAudioDebugStatus(`⚠️ Нет decoder/worklet (crypto): decoder=${!!this.decoder}, worklet=${!!this.workletNode}`);
+                    setAudioDebugStatus(`⚠️ Нет decoder (crypto)`);
                 }
             }
         };
