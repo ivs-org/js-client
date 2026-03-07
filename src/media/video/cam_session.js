@@ -142,6 +142,10 @@ export class CameraSession {
         const s = this._track.getSettings?.() ?? {};
         if (s.frameRate) this.fps = Math.round(s.frameRate);
 
+        // Определяем ориентацию камеры (для мобильных устройств)
+        const isFrontCamera = s.facingMode === 'user';
+        const aspectRatio = s.aspectRatio || (s.width && s.height ? s.width / s.height : 4/3);
+        
         // Firefox ESR: MediaStreamTrackProcessor недоступен, используем canvas-based подход
         if ('MediaStreamTrackProcessor' in window) {
             // Современный подход с WebCodecs
@@ -173,8 +177,21 @@ export class CameraSession {
             this._pumpFrames();
         } else {
             // Firefox ESR: canvas-based захват
-            const fw = (s.width || 640) | 0;
-            const fh = (s.height || 480) | 0;
+            let fw = (s.width || 640) | 0;
+            let fh = (s.height || 480) | 0;
+            
+            // Если размеры не заданы, используем aspectRatio
+            if (!fw || !fh) {
+                if (aspectRatio > 1) {
+                    // Landscape
+                    fw = 640;
+                    fh = Math.round(fw / aspectRatio);
+                } else {
+                    // Portrait (мобильные устройства)
+                    fh = 640;
+                    fw = Math.round(fh * aspectRatio);
+                }
+            }
 
             this._encWidth = EVEN(fw) || fw;
             this._encHeight = EVEN(fh) || fh;
@@ -320,6 +337,12 @@ export class CameraSession {
      * Firefox ESR: canvas-based захват кадров вместо MediaStreamTrackProcessor
      */
     _setupCanvasCapture() {
+        // Сохраняем ориентацию для использования в captureFrame
+        const s = this._track.getSettings?.() ?? {};
+        const isFrontCamera = s.facingMode === 'user';
+        const aspectRatio = s.aspectRatio || (this.width && this.height ? this.width / this.height : 4/3);
+        const isPortrait = aspectRatio < 1;
+        
         // Создаём canvas для захвата кадров
         this._captureCanvas = document.createElement('canvas');
         this._captureCanvas.width = this._encWidth;
@@ -339,8 +362,39 @@ export class CameraSession {
                 if (this._closing || !this._captureCtx || !this._videoEl) return;
 
                 try {
+                    // Очищаем canvas
+                    this._captureCtx.clearRect(0, 0, this._encWidth, this._encHeight);
+                    
+                    // Сохраняем контекст
+                    this._captureCtx.save();
+                    
+                    // Для front camera - зеркальное отражение
+                    if (isFrontCamera) {
+                        this._captureCtx.translate(this._encWidth, 0);
+                        this._captureCtx.scale(-1, 1);
+                    }
+                    
                     // Рисуем кадр из video на canvas
-                    this._captureCtx.drawImage(this._videoEl, 0, 0, this._encWidth, this._encHeight);
+                    // Если portrait orientation - нужно учитывать размеры video
+                    const videoW = this._videoEl.videoWidth || this._encWidth;
+                    const videoH = this._videoEl.videoHeight || this._encHeight;
+                    
+                    if (isPortrait && videoW > videoH) {
+                        // Video в landscape, но нужно portrait
+                        this._captureCtx.drawImage(
+                            this._videoEl,
+                            0, 0, videoW, videoH,
+                            0, 0, this._encWidth, this._encHeight
+                        );
+                    } else {
+                        this._captureCtx.drawImage(
+                            this._videoEl,
+                            0, 0, this._encWidth, this._encHeight
+                        );
+                    }
+                    
+                    // Восстанавливаем контекст
+                    this._captureCtx.restore();
 
                     // Создаём VideoFrame из canvas
                     if (this._canEncode && this.encoder) {
