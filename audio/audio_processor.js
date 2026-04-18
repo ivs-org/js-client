@@ -85,40 +85,71 @@ if (typeof AudioWorkletProcessor !== 'undefined') {
      * Отправляет сырые PCM данные через MessagePort (AudioData создаётся в основном потоке)
      */
     class AudioRecorderProcessor extends AudioWorkletProcessor {
-        constructor() {
+        constructor(options) {
             super();
-            this.buffer = [];
-            this.channels = 2;
-            this.frameSize = 1024; // размер кадра для отправки
+            const opt = options?.processorOptions || {};
+            this.channels = opt.channels || 2;
+            this.frameSize = opt.frameSize || 1024;
+            this.capacity = Math.max(this.frameSize * 4, 4096);
+            this.bufferedFrames = 0;
+            this.buffers = Array.from({ length: this.channels }, () => new Float32Array(this.capacity));
+            this.prevInput = new Float32Array(this.channels);
+            this.prevOutput = new Float32Array(this.channels);
         }
 
         process(inputs, outputs) {
             const input = inputs[0];
             if (!input || !input[0]) return true;
 
-            // Сохраняем данные в буфер
-            for (let ch = 0; ch < input.length; ch++) {
-                if (!this.buffer[ch]) this.buffer[ch] = [];
-                this.buffer[ch].push(...input[ch]);
+            const inputChannels = Math.min(input.length, this.channels);
+            const blockFrames = input[0].length;
+
+            if (this.bufferedFrames + blockFrames > this.capacity) {
+                const overflow = this.bufferedFrames + blockFrames - this.capacity;
+                for (let ch = 0; ch < this.channels; ch++) {
+                    this.buffers[ch].copyWithin(0, overflow, this.bufferedFrames);
+                }
+                this.bufferedFrames -= overflow;
             }
 
-            // Когда набралось достаточно данных — отправляем
-            if (this.buffer[0] && this.buffer[0].length >= this.frameSize) {
-                const numChannels = Math.min(this.buffer.length, this.channels);
-                const frames = this.buffer[0].length;
+            for (let ch = 0; ch < this.channels; ch++) {
+                const src = input[Math.min(ch, inputChannels - 1)];
+                if (!src) continue;
+                this.buffers[ch].set(src, this.bufferedFrames);
+            }
+            this.bufferedFrames += blockFrames;
 
-                // Отправляем сырые данные (AudioData создаётся в основном потоке)
+            while (this.bufferedFrames >= this.frameSize) {
                 const channelData = [];
-                for (let ch = 0; ch < numChannels; ch++) {
-                    channelData.push(this.buffer[ch].splice(0, frames));
+                for (let ch = 0; ch < this.channels; ch++) {
+                    const chunk = new Int16Array(this.frameSize);
+                    const src = this.buffers[ch];
+                    for (let i = 0; i < this.frameSize; i++) {
+                        // Remove DC bias from Safari mic capture before Opus encode.
+                        const x = src[i];
+                        const y = x - this.prevInput[ch] + 0.995 * this.prevOutput[ch];
+                        this.prevInput[ch] = x;
+                        this.prevOutput[ch] = y;
+                        const s = Math.max(-1, Math.min(1, y));
+                        chunk[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
+                    channelData.push(chunk);
                 }
 
+                const remaining = this.bufferedFrames - this.frameSize;
+                if (remaining > 0) {
+                    for (let ch = 0; ch < this.channels; ch++) {
+                        this.buffers[ch].copyWithin(0, this.frameSize, this.bufferedFrames);
+                    }
+                }
+                this.bufferedFrames = remaining;
+
                 this.port.postMessage({
-                    type: 'audio-pcm',
+                    type: 'audio-pcm-s16',
                     channelData: channelData,
-                    numberOfChannels: numChannels,
-                    numberOfFrames: frames
-                });
+                    numberOfChannels: this.channels,
+                    numberOfFrames: this.frameSize
+                }, channelData.map((chunk) => chunk.buffer));
             }
 
             return true;
