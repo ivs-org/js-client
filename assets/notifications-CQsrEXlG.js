@@ -1,0 +1,1 @@
+import{r as e}from"./index-CIg3tr78.js";function t(){return typeof Notification<"u"&&document.hidden===!0&&Notification.permission==="granted"}async function o(i){t()&&"serviceWorker"in navigator&&(await e(),await(await navigator.serviceWorker.ready).showNotification(i.title,{body:i.body||"",silent:!0,data:i.data}))}export{t as canNotifyNow,o as showMessageNotification};
