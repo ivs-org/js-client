@@ -11,9 +11,10 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let payload = { title: 'VideoGrace', body: event.data?.text?.() || '', url: './' };
+  const rawPayload = event.data?.text?.() || '';
+  let payload = { title: 'VideoGrace', body: rawPayload, url: './' };
   try {
-    const parsed = event.data?.json?.();
+    const parsed = rawPayload ? JSON.parse(rawPayload) : null;
     if (parsed && typeof parsed === 'object') {
       payload = {
         ...payload,
