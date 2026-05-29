@@ -11,12 +11,25 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  const body = event.data?.text?.() || '';
+  let payload = { title: 'VideoGrace', body: event.data?.text?.() || '', url: './' };
+  try {
+    const parsed = event.data?.json?.();
+    if (parsed && typeof parsed === 'object') {
+      payload = {
+        ...payload,
+        ...parsed,
+      };
+    }
+  } catch {
+    // Plain text pushes are still supported for compatibility.
+  }
+
   event.waitUntil(
-    self.registration.showNotification('VideoGrace', {
-      body,
+    self.registration.showNotification(payload.title || 'VideoGrace', {
+      body: payload.body || '',
       icon: '/favicon.ico',
       badge: '/favicon.ico',
+      data: payload,
     })
   );
 });
@@ -24,7 +37,8 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const targetUrl = new URL('./', self.registration.scope).href;
+  const payloadUrl = event.notification.data?.url || './';
+  const targetUrl = new URL(payloadUrl, self.registration.scope).href;
 
   event.waitUntil((async () => {
     const clientList = await clients.matchAll({
