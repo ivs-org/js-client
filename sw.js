@@ -1,3 +1,5 @@
+const VG_SW_VERSION = 'push-json-v3';
+
 self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('message', (event) => {
@@ -20,9 +22,26 @@ self.addEventListener('push', (event) => {
         ...payload,
         ...parsed,
       };
+      if (typeof payload.body !== 'string') {
+        payload.body = '';
+      }
     }
   } catch {
     // Plain text pushes are still supported for compatibility.
+  }
+
+  if (typeof payload.body === 'string' && payload.body.trim().startsWith('{')) {
+    try {
+      const nested = JSON.parse(payload.body);
+      if (nested && typeof nested === 'object') {
+        payload = {
+          ...payload,
+          ...nested,
+        };
+      }
+    } catch {
+      // Keep the raw body when it is not JSON.
+    }
   }
 
   event.waitUntil(
@@ -30,7 +49,7 @@ self.addEventListener('push', (event) => {
       body: payload.body || '',
       icon: '/favicon.ico',
       badge: '/favicon.ico',
-      data: payload,
+      data: { ...payload, swVersion: VG_SW_VERSION },
     })
   );
 });
