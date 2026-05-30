@@ -1,6 +1,7 @@
 {
   "name": "VideoGrace",
   "short_name": "VideoGrace",
+  "id": "/",
   "description": "Мессенджер и платформа видеоконференций VideoGrace",
   "start_url": "/",
   "scope": "/",

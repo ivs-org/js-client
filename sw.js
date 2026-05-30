@@ -1,4 +1,4 @@
-const VG_SW_VERSION = 'push-json-v6';
+const VG_SW_VERSION = 'push-click-v7';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -27,7 +27,7 @@ function parseJsonObject(text) {
 
 function normalizePushPayload(rawPayload) {
   const cleanRawPayload = String(rawPayload || '').replace(/[\u0000-\u001f]+$/g, '').trim();
-  let payload = { title: 'VideoGrace', body: cleanRawPayload, url: './' };
+  let payload = { title: 'VideoGrace', body: cleanRawPayload, url: '/' };
   const parsed = parseJsonObject(cleanRawPayload);
 
   if (parsed) {
@@ -110,6 +110,20 @@ function normalizePushPayload(rawPayload) {
   return payload;
 }
 
+function resolveNotificationUrl(value) {
+  const scopeUrl = new URL(self.registration.scope);
+
+  try {
+    const targetUrl = new URL(value || '/', scopeUrl.href);
+    if (targetUrl.origin !== scopeUrl.origin || !targetUrl.href.startsWith(scopeUrl.href)) {
+      return scopeUrl.href;
+    }
+    return targetUrl.href;
+  } catch {
+    return scopeUrl.href;
+  }
+}
+
 self.addEventListener('push', (event) => {
   const rawPayload = event.data?.text?.() || '';
   const payload = normalizePushPayload(rawPayload);
@@ -127,8 +141,11 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const payloadUrl = event.notification.data?.url || './';
-  const targetUrl = new URL(payloadUrl, self.registration.scope).href;
+  const notificationData = event.notification.data || {};
+  const targetUrl = resolveNotificationUrl(
+    notificationData.url || notificationData.link || notificationData.click_action || '/'
+  );
+  const scopeUrl = self.registration.scope;
 
   event.waitUntil((async () => {
     const clientList = await clients.matchAll({
@@ -138,28 +155,34 @@ self.addEventListener('notificationclick', (event) => {
 
     const client =
       clientList.find((entry) => entry.url.startsWith(targetUrl)) ||
-      clientList.find((entry) => entry.url.startsWith(self.registration.scope)) ||
+      clientList.find((entry) => entry.url.startsWith(scopeUrl)) ||
       clientList[0];
 
     if (client) {
       if ('navigate' in client && !client.url.startsWith(targetUrl)) {
-        await client.navigate(targetUrl);
+        await client.navigate(targetUrl).catch(() => null);
       }
       if ('focus' in client) {
-        await client.focus();
+        await client.focus().catch(() => null);
       }
 
       client.postMessage({
         type: 'notification_click',
-        data: event.notification.data || null,
+        data: notificationData,
       });
 
       return;
     }
 
-    const opened = await clients.openWindow(targetUrl);
-    if (!opened && targetUrl !== self.registration.scope) {
-      await clients.openWindow(self.registration.scope);
+    try {
+      const opened = await clients.openWindow(targetUrl);
+      if (!opened && targetUrl !== scopeUrl) {
+        await clients.openWindow(scopeUrl);
+      }
+    } catch {
+      if (targetUrl !== scopeUrl) {
+        await clients.openWindow(scopeUrl);
+      }
     }
   })());
 });
