@@ -1,4 +1,4 @@
-const VG_SW_VERSION = 'push-json-v5';
+const VG_SW_VERSION = 'push-json-v6';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -66,6 +66,33 @@ function normalizePushPayload(rawPayload) {
       ...payload,
       ...nested,
     };
+  }
+
+  if (typeof payload.message === 'string' && payload.message.trim()) {
+    payload.body = payload.message;
+  } else if (typeof payload.preview === 'string' && payload.preview.trim()) {
+    payload.body = payload.preview;
+  } else if (typeof payload.text === 'string' && payload.text.trim()) {
+    payload.body = payload.text;
+  }
+
+  if (payload.type === 'message') {
+    const author = typeof payload.author === 'string' ? payload.author.trim() : '';
+    const authorName = typeof payload.author_name === 'string' ? payload.author_name.trim() : '';
+    const senderName = typeof payload.sender_name === 'string' ? payload.sender_name.trim() : '';
+    const conference = typeof payload.conference === 'string' ? payload.conference.trim() : '';
+    const conferenceName = typeof payload.conference_name === 'string' ? payload.conference_name.trim() : '';
+    const name = author || authorName || senderName;
+    const room = conference || conferenceName;
+    if (name && room) {
+      payload.title = `${name} @ ${room}`;
+    } else if (name) {
+      payload.title = name;
+    } else if (room) {
+      payload.title = room;
+    } else if (!payload.title || payload.title === 'VideoGrace') {
+      payload.title = 'Новое сообщение';
+    }
   }
 
   if (typeof payload.title !== 'string' || !payload.title.trim()) {
