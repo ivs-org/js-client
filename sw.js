@@ -1,4 +1,4 @@
-const VG_SW_VERSION = 'push-json-v3';
+const VG_SW_VERSION = 'push-json-v4';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -12,37 +12,80 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-self.addEventListener('push', (event) => {
-  const rawPayload = event.data?.text?.() || '';
-  let payload = { title: 'VideoGrace', body: rawPayload, url: './' };
-  try {
-    const parsed = rawPayload ? JSON.parse(rawPayload) : null;
-    if (parsed && typeof parsed === 'object') {
-      payload = {
-        ...payload,
-        ...parsed,
-      };
-      if (typeof payload.body !== 'string') {
-        payload.body = '';
-      }
-    }
-  } catch {
-    // Plain text pushes are still supported for compatibility.
+function parseJsonObject(text) {
+  if (!text || typeof text !== 'string') {
+    return null;
   }
 
-  if (typeof payload.body === 'string' && payload.body.trim().startsWith('{')) {
-    try {
-      const nested = JSON.parse(payload.body);
-      if (nested && typeof nested === 'object') {
-        payload = {
-          ...payload,
-          ...nested,
-        };
-      }
-    } catch {
-      // Keep the raw body when it is not JSON.
-    }
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
   }
+}
+
+function normalizePushPayload(rawPayload) {
+  const cleanRawPayload = String(rawPayload || '').replace(/[\u0000-\u001f]+$/g, '').trim();
+  let payload = { title: 'VideoGrace', body: cleanRawPayload, url: './' };
+  const parsed = parseJsonObject(cleanRawPayload);
+
+  if (parsed) {
+    payload = {
+      ...payload,
+      ...parsed,
+    };
+  }
+
+  if (payload.notification && typeof payload.notification === 'object') {
+    payload = {
+      ...payload,
+      ...payload.notification,
+    };
+  }
+
+  if (payload.data && typeof payload.data === 'object') {
+    payload = {
+      ...payload,
+      ...payload.data,
+    };
+  }
+
+  for (let i = 0; i < 2; i += 1) {
+    if (typeof payload.body !== 'string') {
+      payload.body = '';
+      break;
+    }
+
+    const nested = parseJsonObject(payload.body.trim());
+    if (!nested) {
+      break;
+    }
+
+    payload = {
+      ...payload,
+      ...nested,
+    };
+  }
+
+  if (typeof payload.title !== 'string' || !payload.title.trim()) {
+    payload.title = 'VideoGrace';
+  }
+
+  if (typeof payload.body !== 'string') {
+    payload.body = '';
+  }
+
+  if (payload.body.trim().startsWith('{')) {
+    payload.body = 'Новое событие';
+  }
+
+  return payload;
+}
+
+self.addEventListener('push', (event) => {
+  const rawPayload = event.data?.text?.() || '';
+  const payload = normalizePushPayload(rawPayload);
 
   event.waitUntil(
     self.registration.showNotification(payload.title || 'VideoGrace', {
