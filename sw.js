@@ -117,8 +117,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title || 'VideoGrace', {
       body: payload.body || '',
-      icon: '/favicon.ico',
-      badge: '/favicon.ico',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/favicon-32.png',
       data: { ...payload, swVersion: VG_SW_VERSION },
     })
   );
