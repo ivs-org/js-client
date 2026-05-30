@@ -1,4 +1,4 @@
-const VG_SW_VERSION = 'push-json-v4';
+const VG_SW_VERSION = 'push-json-v5';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -109,9 +109,15 @@ self.addEventListener('notificationclick', (event) => {
       includeUncontrolled: true,
     });
 
-    const client = clientList.find((entry) => entry.url.startsWith(targetUrl)) || clientList[0];
+    const client =
+      clientList.find((entry) => entry.url.startsWith(targetUrl)) ||
+      clientList.find((entry) => entry.url.startsWith(self.registration.scope)) ||
+      clientList[0];
 
     if (client) {
+      if ('navigate' in client && !client.url.startsWith(targetUrl)) {
+        await client.navigate(targetUrl);
+      }
       if ('focus' in client) {
         await client.focus();
       }
@@ -124,6 +130,9 @@ self.addEventListener('notificationclick', (event) => {
       return;
     }
 
-    await clients.openWindow(targetUrl);
+    const opened = await clients.openWindow(targetUrl);
+    if (!opened && targetUrl !== self.registration.scope) {
+      await clients.openWindow(self.registration.scope);
+    }
   })());
 });
