@@ -1,4 +1,4 @@
-const VG_SW_VERSION = 'push-click-v7';
+const VG_SW_VERSION = 'push-click-v8';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -127,16 +127,34 @@ function resolveNotificationUrl(value) {
 self.addEventListener('push', (event) => {
   const rawPayload = event.data?.text?.() || '';
   const payload = normalizePushPayload(rawPayload);
+  const targetUrl = resolveNotificationUrl(payload.url || payload.link || payload.click_action || '/');
 
   event.waitUntil(
     self.registration.showNotification(payload.title || 'VideoGrace', {
       body: payload.body || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/favicon-32.png',
-      data: { ...payload, swVersion: VG_SW_VERSION },
+      data: { ...payload, url: targetUrl, swVersion: VG_SW_VERSION },
     })
   );
 });
+
+async function focusClient(client, targetUrl) {
+  if (!client) {
+    return null;
+  }
+
+  let focusedClient = client;
+  if ('navigate' in focusedClient && !focusedClient.url.startsWith(targetUrl)) {
+    focusedClient = await focusedClient.navigate(targetUrl).catch(() => null) || focusedClient;
+  }
+
+  if ('focus' in focusedClient) {
+    return await focusedClient.focus().catch(() => null);
+  }
+
+  return null;
+}
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
@@ -158,24 +176,21 @@ self.addEventListener('notificationclick', (event) => {
       clientList.find((entry) => entry.url.startsWith(scopeUrl)) ||
       clientList[0];
 
-    if (client) {
-      if ('navigate' in client && !client.url.startsWith(targetUrl)) {
-        await client.navigate(targetUrl).catch(() => null);
-      }
-      if ('focus' in client) {
-        await client.focus().catch(() => null);
-      }
-
-      client.postMessage({
+    const focused = await focusClient(client, targetUrl);
+    if (focused) {
+      focused.postMessage({
         type: 'notification_click',
         data: notificationData,
       });
-
       return;
     }
 
     try {
       const opened = await clients.openWindow(targetUrl);
+      opened?.postMessage?.({
+        type: 'notification_click',
+        data: notificationData,
+      });
       if (!opened && targetUrl !== scopeUrl) {
         await clients.openWindow(scopeUrl);
       }
