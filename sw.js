@@ -1,5 +1,4 @@
-const VG_SW_VERSION = 'auth-cold-start-v9';
-const VG_SW_ACTIVATION_MARKER = `videograce-sw-${VG_SW_VERSION}`;
+const VG_SW_VERSION = 'safe-activation-v10';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -10,26 +9,11 @@ self.addEventListener('message', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil((async () => {
-    const existingCaches = await caches.keys();
-    const firstActivation = !existingCaches.includes(VG_SW_ACTIVATION_MARKER);
-    await caches.open(VG_SW_ACTIVATION_MARKER);
-    await self.clients.claim();
-
-    // Installed PWAs can restore a frozen window that keeps executing an old
-    // entry bundle. Force one real navigation when this recovery worker first
-    // takes control; subsequent starts are unaffected.
-    if (firstActivation) {
-      const clientList = await self.clients.matchAll({
-        type: 'window',
-        includeUncontrolled: true,
-      });
-      await Promise.all(clientList.map((client) => {
-        if (!('navigate' in client)) return Promise.resolve();
-        return client.navigate(client.url).catch(() => null);
-      }));
-    }
-  })());
+  // Never navigate open windows from activation. Chromium can keep the second
+  // document navigation pending for minutes, leaving a fresh profile or PWA on
+  // a permanent white screen. The page-level update guard handles stale entry
+  // bundles after the application has booted.
+  event.waitUntil(self.clients.claim());
 });
 
 function parseJsonObject(text) {
