@@ -29,6 +29,55 @@
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="vg-boot-fallback" role="status" aria-live="polite">
+        <img src="/icons/icon-192.png" alt="VideoGrace" width="72" height="72" />
+        <strong>VideoGrace</strong>
+        <span id="vg-boot-status">Запускаем приложение...</span>
+        <a id="vg-boot-recover" href="/recover.html" hidden>Восстановить запуск</a>
+      </div>
+    </div>
+    <style>
+      #vg-boot-fallback {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        box-sizing: border-box;
+        padding: 28px;
+        background: #080d18;
+        color: #f8fafc;
+        font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        text-align: center;
+      }
+      #vg-boot-fallback img { border-radius: 18px; }
+      #vg-boot-fallback strong { font-size: 22px; }
+      #vg-boot-status { color: #94a3b8; }
+      #vg-boot-recover {
+        margin-top: 8px;
+        border-radius: 10px;
+        padding: 11px 18px;
+        background: #0284c7;
+        color: #fff;
+        font-weight: 600;
+        text-decoration: none;
+      }
+    </style>
+    <script>
+      (function () {
+        var revealRecovery = function () {
+          var status = document.getElementById('vg-boot-status');
+          var recover = document.getElementById('vg-boot-recover');
+          if (!status || !recover) return;
+          status.textContent = 'Приложение не запустилось. Можно безопасно обновить локальный загрузчик.';
+          recover.hidden = false;
+        };
+        window.setTimeout(revealRecovery, 8000);
+        window.addEventListener('error', revealRecovery);
+        window.addEventListener('unhandledrejection', revealRecovery);
+      }());
+    </script>
   </body>
 </html>
