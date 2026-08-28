@@ -157,4 +157,53 @@ if (typeof AudioWorkletProcessor !== 'undefined') {
     }
 
     registerProcessor('audio-recorder-processor', AudioRecorderProcessor);
+
+    /**
+     * AudioLevelProcessor - lightweight local VAD source for browsers that do
+     * not expose a usable RTCAudioSourceStats.audioLevel (notably Firefox).
+     * It emits one RMS number and never transfers microphone PCM.
+     */
+    class AudioLevelProcessor extends AudioWorkletProcessor {
+        constructor(options) {
+            super();
+            const opt = options?.processorOptions || {};
+            this.reportSamples = Math.max(128, Number(opt.reportSamples || 960));
+            this.sumSquares = 0;
+            this.sampleCount = 0;
+            this.frameCount = 0;
+        }
+
+        process(inputs, outputs) {
+            const output = outputs[0];
+            if (output) {
+                for (const channel of output) channel.fill(0);
+            }
+
+            const input = inputs[0];
+            if (!input || !input[0]) return true;
+            const blockFrames = input[0].length;
+            for (const channel of input) {
+                if (!channel) continue;
+                for (let i = 0; i < channel.length; i++) {
+                    const sample = channel[i];
+                    this.sumSquares += sample * sample;
+                    this.sampleCount += 1;
+                }
+            }
+            this.frameCount += blockFrames;
+
+            if (this.frameCount >= this.reportSamples) {
+                const rms = this.sampleCount > 0
+                    ? Math.sqrt(this.sumSquares / this.sampleCount)
+                    : 0;
+                this.port.postMessage({ type: 'audio-level', rms });
+                this.sumSquares = 0;
+                this.sampleCount = 0;
+                this.frameCount = 0;
+            }
+            return true;
+        }
+    }
+
+    registerProcessor('audio-level-processor', AudioLevelProcessor);
 }
