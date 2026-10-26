@@ -67,11 +67,30 @@
     </style>
     <script>
       (function () {
+        // This fallback must work even when the application bundle cannot load.
+        // Keep the storage key and RU fallback aligned with src/i18n/resources.ts.
+        var language = 'ru';
+        try {
+          var savedLanguage = (localStorage.getItem('vg_ui_language') || '').trim().toLowerCase().split(/[-_]/)[0];
+          if (savedLanguage === 'en') language = 'en';
+        } catch (error) {}
+        var text = language === 'en' ? {
+          starting: 'Starting the app...',
+          recover: 'Restore startup',
+          failed: 'The app did not start. You can safely refresh the local loader.'
+        } : {
+          starting: 'Запускаем приложение...',
+          recover: 'Восстановить запуск',
+          failed: 'Приложение не запустилось. Можно безопасно обновить локальный загрузчик.'
+        };
+        document.documentElement.lang = language;
+        document.getElementById('vg-boot-status').textContent = text.starting;
+        document.getElementById('vg-boot-recover').textContent = text.recover;
         var revealRecovery = function () {
           var status = document.getElementById('vg-boot-status');
           var recover = document.getElementById('vg-boot-recover');
           if (!status || !recover) return;
-          status.textContent = 'Приложение не запустилось. Можно безопасно обновить локальный загрузчик.';
+          status.textContent = text.failed;
           recover.hidden = false;
         };
         window.setTimeout(revealRecovery, 8000);

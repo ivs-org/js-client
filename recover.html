@@ -36,12 +36,36 @@
   <body>
     <main>
       <img src="/icons/icon-192.png" alt="VideoGrace" width="72" height="72" />
-      <h1>Восстанавливаем запуск</h1>
+      <h1 id="heading">Восстанавливаем запуск</h1>
       <p id="status">Обновляем Service Worker и локальный кэш. Аккаунты и сообщения сохранятся.</p>
       <a id="continue" href="/" hidden>Открыть VideoGrace</a>
     </main>
     <script>
       (function () {
+        // Recovery must remain independent of the main bundle and its translations.
+        var language = 'ru';
+        try {
+          var savedLanguage = (localStorage.getItem('vg_ui_language') || '').trim().toLowerCase().split(/[-_]/)[0];
+          if (savedLanguage === 'en') language = 'en';
+        } catch (error) {}
+        var text = language === 'en' ? {
+          title: 'VideoGrace recovery',
+          heading: 'Restoring startup',
+          status: 'Refreshing the Service Worker and local cache. Accounts and messages will be preserved.',
+          open: 'Open VideoGrace',
+          failed: 'Automatic recovery did not finish. Open the app again.'
+        } : {
+          title: 'Восстановление VideoGrace',
+          heading: 'Восстанавливаем запуск',
+          status: 'Обновляем Service Worker и локальный кэш. Аккаунты и сообщения сохранятся.',
+          open: 'Открыть VideoGrace',
+          failed: 'Автоматическое восстановление не завершилось. Откройте приложение еще раз.'
+        };
+        document.documentElement.lang = language;
+        document.title = text.title;
+        document.getElementById('heading').textContent = text.heading;
+        document.getElementById('status').textContent = text.status;
+        document.getElementById('continue').textContent = text.open;
         var finished = false;
         var complete = function () {
           if (finished) return;
@@ -52,7 +76,7 @@
         var failed = function () {
           var status = document.getElementById('status');
           var link = document.getElementById('continue');
-          status.textContent = 'Автоматическое восстановление не завершилось. Откройте приложение еще раз.';
+          status.textContent = text.failed;
           link.hidden = false;
         };
         var tasks = [];
