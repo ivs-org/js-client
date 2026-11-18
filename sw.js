@@ -1,4 +1,4 @@
-const VG_SW_VERSION = 'safe-activation-v10';
+const VG_SW_VERSION = 'unread-badge-v11';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -6,7 +6,44 @@ self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+  if (event.data?.type === 'APP_BADGE_UPDATE') {
+    const { userId, unreadCount, readChatKeys } = event.data;
+    if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isSafeInteger(unreadCount) || unreadCount < 0) return;
+    event.waitUntil(syncUnreadBadge(userId, unreadCount, Array.isArray(readChatKeys) ? readChatKeys : []));
+  }
 });
+
+let badgeUpdates = Promise.resolve();
+
+function updateAppBadge(count, afterUpdate) {
+  badgeUpdates = badgeUpdates.then(async () => {
+    try {
+      if (count === 0 && self.navigator.clearAppBadge) await self.navigator.clearAppBadge();
+      else if (count === undefined) await self.navigator.setAppBadge?.();
+      else await self.navigator.setAppBadge?.(count);
+    } catch {
+      // Badge permission/support errors must never prevent push delivery.
+    }
+    await afterUpdate?.();
+  }).catch(() => {});
+  return badgeUpdates;
+}
+
+function syncUnreadBadge(userId, count, readChatKeys) {
+  return updateAppBadge(count, async () => {
+    const read = new Set(readChatKeys);
+    const notifications = await self.registration.getNotifications().catch(() => []);
+    for (const notification of notifications) {
+      const data = notification.data || {};
+      if (data.type && data.type !== 'message') continue;
+      if (data.type !== 'message' && !data.chatKey && !data.message_id && !data.messageId) continue;
+      const owner = Number(data.client_id || data.userId || userId);
+      if (owner !== userId) continue;
+      const chatKey = data.chatKey || data.chat_key || (data.conference_tag ? `conf:${data.conference_tag}` : '');
+      if (count === 0 || read.has(chatKey)) notification.close();
+    }
+  });
+}
 
 self.addEventListener('activate', (event) => {
   // Never navigate open windows from activation. Chromium can keep the second
@@ -133,14 +170,23 @@ self.addEventListener('push', (event) => {
   const payload = normalizePushPayload(rawPayload);
   const targetUrl = resolveNotificationUrl(payload.url || payload.link || payload.click_action || '/');
 
-  event.waitUntil(
-    self.registration.showNotification(payload.title || 'VideoGrace', {
+  event.waitUntil((async () => {
+    // Existing server payloads have no authoritative unread total. Show a flag
+    // in the background; the connected app restores the exact chat count.
+    if (payload.type === 'message') await updateAppBadge();
+    await self.registration.showNotification(payload.title || 'VideoGrace', {
       body: payload.body || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/favicon-32.png',
       data: { ...payload, url: targetUrl, swVersion: VG_SW_VERSION },
-    })
-  );
+    });
+    if (payload.type === 'message') {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true }).catch(() => []);
+      for (const client of windows) {
+        if (client.visibilityState === 'visible' && client.focused) client.postMessage({ type: 'APP_BADGE_REFRESH' });
+      }
+    }
+  })());
 });
 
 async function focusClient(client, targetUrl) {
